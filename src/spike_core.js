@@ -1,4 +1,4 @@
-/* smartsetu app-spike / spike_core v0.2 (S13-1, S13-2: reread, state report, visible/UA modes). TEST ONLY, not the product.
+/* smartsetu app-spike / spike_core v0.3 (S13-1, S13-2: reread, state report, visible/UA modes; S13-3: page structure dump). TEST ONLY, not the product.
  * Reads ONE store search page in a hidden webview, one store after another (never in parallel), only when the owner taps the button.
  * The page is read with pagesnap.js (same file as the extension) and parsed with bundle.js parseSearch (same file as the extension).
  * No login, no cookies read, no storage, no network from here. Store list and URLs are copied from extension/runner_core.js (tab-only stores). */
@@ -31,18 +31,34 @@ function detailOf(ev) {
   return null;
 }
 
-// Diagnostic only (no page text, no links): asks the page for its state so an empty result can be explained.
-function buildDiagCode(key) {
-  return ';(function () {\n' +
-    'var K = ' + JSON.stringify(key) + ';\n' +
-    'function send(o) { try { window.mobileApp.postMessage({ detail: o }); } catch (e) {} }\n' +
-    'try {\n' +
-    '  var pr = /^(?:Price\\s*:?\\s*)?(?:\\u20B9|Rs\\.?)\\s?\\d[\\d,]*(?:\\.\\d+)?\\.?$/i, n = 0, all = document.querySelectorAll("body *");\n' +
-    '  for (var i = 0; i < all.length; i++) { if (all[i].children.length === 0 && pr.test((all[i].textContent || "").trim())) n++; }\n' +
-    '  send({ kind: "diag", key: K, readyState: document.readyState, visibility: document.visibilityState, w: window.innerWidth, h: window.innerHeight, links: document.querySelectorAll("a[href]").length, priceLeaves: n, textLen: ((document.body && document.body.innerText) || "").length, url: location.href, title: document.title });\n' +
-    '} catch (e) { send({ kind: "diag", key: K, error: String((e && e.message) || e) }); }\n' +
-    '})();\n';
+// Diagnostic only, shown on the owner's own screen, never stored or sent anywhere. Explains an empty result (S13-3, same for every store, D-073):
+// price items, same-site links, how pagesnap would climb from the first 2 price items (tag.class textLen/hasLink), and a 200 char page text sample.
+function diagFn(K) {
+  function send(o) { try { window.mobileApp.postMessage({ detail: o }); } catch (e) {} }
+  try {
+    var pr = /^(?:Price\s*:?\s*)?(?:\u20B9|Rs\.?)\s?\d[\d,]*(?:\.\d+)?\.?$/i, leaves = [], all = document.querySelectorAll("body *"), i;
+    for (i = 0; i < all.length; i++) { if (all[i].children.length === 0 && pr.test((all[i].textContent || "").trim())) leaves.push(all[i]); }
+    var host = location.hostname.replace(/^www\./, ""), as = document.querySelectorAll("a[href]"), same = 0, paths = [];
+    for (i = 0; i < as.length; i++) {
+      try { var u = new URL(as[i].href); if (u.pathname !== "/" && (u.hostname === host || u.hostname === "www." + host || u.hostname.slice(-host.length - 1) === "." + host)) { same++; if (paths.length < 3) paths.push(u.pathname.slice(0, 60)); } } catch (e) {}
+    }
+    function struck(e) { try { return getComputedStyle(e).textDecorationLine.indexOf("line-through") >= 0; } catch (e2) { return false; } }
+    var nonStruck = 0, chains = [];
+    for (i = 0; i < leaves.length; i++) { if (!struck(leaves[i])) nonStruck++; }
+    for (i = 0; i < leaves.length && chains.length < 2; i++) {
+      var p = leaves[i], up = [], stop = -1, k;
+      for (k = 0; k < 7 && p.parentElement; k++) {
+        p = p.parentElement;
+        var len = p.innerText ? p.innerText.length : 0, hasA = p.querySelector("a[href]") ? 1 : 0;
+        up.push(String(p.tagName || "").toLowerCase() + "." + String(typeof p.className === "string" ? p.className : "").split(" ")[0].slice(0, 16) + " " + len + "/" + hasA);
+        if (stop < 0 && hasA && len > 30 && len < 700) { stop = k + 1; break; }
+      }
+      chains.push({ price: (leaves[i].textContent || "").trim().slice(0, 14), struck: struck(leaves[i]), up: up, stop: stop });
+    }
+    send({ kind: "diag", key: K, readyState: document.readyState, visibility: document.visibilityState, w: window.innerWidth, h: window.innerHeight, links: as.length, sameLinks: same, paths: paths, priceLeaves: leaves.length, nonStruck: nonStruck, chains: chains, textLen: ((document.body && document.body.innerText) || "").length, sample: ((document.body && document.body.innerText) || "").replace(/\s+/g, " ").trim().slice(0, 200), url: location.href, title: document.title });
+  } catch (e) { send({ kind: "diag", key: K, error: String((e && e.message) || e) }); }
 }
+function buildDiagCode(key) { return 'var K = ' + JSON.stringify(key) + ';\n(' + diagFn.toString() + ')(K);\n'; }
 // Same shape as a Chrome Android user agent: the WebView marks ("; wv" and "Version/x.y") are removed. Derived from the real one, nothing invented.
 function chromeUa(ua) { return String(ua || '').replace('; wv)', ')').replace(/ Version\/\d+(\.\d+)?/, ''); }
 
@@ -134,8 +150,14 @@ function describe(r) {
   if (r.first && r.first.length) s += '\n   ' + r.first.map(function (c) { return (c.title || '?') + ' - Rs ' + c.priceNow; }).join('\n   ');
   if (r.state !== 'ok' && (r.url || r.title)) s += '\n   page: ' + (r.title || '?') + ' | ' + (r.url || '?');
   if (r.diag) { var d = r.diag; s += d.error ? '\n   state error: ' + d.error : '\n   state: ' + d.readyState + ', ' + d.visibility + ', ' + d.w + 'x' + d.h + ', links ' + d.links + ', price items ' + d.priceLeaves + ', text ' + d.textLen + ' chars'; }
+  if (r.diag && !r.diag.error && r.diag.chains) {
+    var g = r.diag;
+    s += '\n   same-site links ' + g.sameLinks + (g.paths && g.paths.length ? ' e.g. ' + g.paths.join(' , ') : '') + ', price items not struck ' + g.nonStruck;
+    g.chains.forEach(function (c) { s += '\n   price ' + c.price + (c.struck ? ' (struck)' : '') + ' -> ' + c.up.join(' > ') + (c.stop > 0 ? ' [card at step ' + c.stop + ']' : ' [no card box in 7 steps]'); });
+    if (g.sample) s += '\n   text: ' + g.sample;
+  }
   return s;
 }
 
-var api = { STORES: STORES, buildInjectCode: buildInjectCode, buildDiagCode: buildDiagCode, chromeUa: chromeUa, runStore: runStore, runAll: runAll, describe: describe, detailOf: detailOf };
+var api = { STORES: STORES, buildInjectCode: buildInjectCode, buildDiagCode: buildDiagCode, diagFn: diagFn, chromeUa: chromeUa, runStore: runStore, runAll: runAll, describe: describe, detailOf: detailOf };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

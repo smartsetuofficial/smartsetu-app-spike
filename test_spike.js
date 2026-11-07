@@ -109,6 +109,38 @@ var fast = { pagesnapSrc: pagesnapSrc, loadMs: 200, settleMs: 5, readMs: 300, di
   var sil = function (mode) { var a = mockApi({ silent: true }); return core.runStore(a, core.STORES[0], 'x', Object.assign({}, fast, { mode: mode, ua: wv })).then(function () { return a.calls.openOpts[0]; }); };
   var mh = await sil('hidden'), mv = await sil('visible'), mu = await sil('ua');
   ok(mh.visible === false && !mh.ua && mv.visible === true && !mv.ua && mu.visible === false && mu.ua && mu.ua.indexOf('wv') < 0, 'T16 hidden/visible/ua modes passed to open');
+  // T17/T18 page structure dump (S13-3): the injected code runs against a tiny fake page for EVERY store host (D-073)
+  var Node17 = function (tag, cls, kids, o) {
+    var n = { tagName: tag.toUpperCase(), className: cls || '', children: [], parentElement: null, href: (o && o.href) || null, struck: !!(o && o.struck), text: typeof kids === 'string' ? kids : null };
+    (Array.isArray(kids) ? kids : []).forEach(function (k) { k.parentElement = n; n.children.push(k); });
+    n.desc = function () { var out = []; n.children.forEach(function (c) { out.push(c); out = out.concat(c.desc()); }); return out; };
+    Object.defineProperty(n, 'textContent', { get: function () { return n.text != null ? n.text : n.children.map(function (c) { return c.textContent; }).join(' '); } });
+    Object.defineProperty(n, 'innerText', { get: function () { return n.text != null ? n.text : n.children.map(function (c) { return c.innerText; }).join('\n'); } });
+    n.querySelector = function () { var f = n.desc().filter(function (x) { return x.tagName === 'A' && x.href; }); return f[0] || null; };
+    return n;
+  };
+  var runDiag17 = function (host, body) {
+    var sent = [], all = body.desc();
+    var ctx = { URL: URL, String: String, JSON: JSON, window: { innerWidth: 433, innerHeight: 870, mobileApp: { postMessage: function (m) { sent.push(m.detail); } } },
+      location: { hostname: 'www.' + host, href: 'https://www.' + host + '/s' }, getComputedStyle: function (e) { return { textDecorationLine: e.struck ? 'line-through' : 'none' }; },
+      document: { readyState: 'complete', visibilityState: 'hidden', title: 'T', body: body, querySelectorAll: function (q) { return q === 'body *' ? all : all.filter(function (x) { return x.tagName === 'A' && x.href; }); } } };
+    vm.runInNewContext(core.buildDiagCode('k'), ctx);
+    return sent[0];
+  };
+  var cardPage = function (host) { return Node17('body', '', [Node17('ul', 'list', [Node17('li', 'card', [Node17('a', '', 'Boat Airdopes 141 true wireless earbuds', { href: 'https://www.' + host + '/boat/p/1' }), Node17('div', 'pw', [Node17('span', 'price', 'Rs. 999'), Node17('span', 'mrp', 'Rs. 1999', { struck: true })])])])]); };
+  var okAll = true;
+  core.STORES.forEach(function (st) {
+    var host = new URL(st.url('x')).hostname.replace(/^www\./, ''), d = runDiag17(host, cardPage(host));
+    var line = core.describe({ store: st.label, state: 'no_listings', reason: 'x', ms: 1000, mode: 'hidden', loaded: true, tries: 3, diag: d });
+    if (!(d.kind === 'diag' && d.key === 'k' && d.priceLeaves === 2 && d.nonStruck === 1 && d.sameLinks === 1 && d.chains.length === 2 && d.chains[0].stop === 2 && d.chains[1].struck === true && /card at step 2/.test(line) && /price items 2/.test(line) && /same-site links 1/.test(line))) { okAll = false; console.log('T17 detail', st.key, JSON.stringify(d)); }
+  });
+  ok(okAll, 'T17 structure dump finds the card box on every store host');
+  var noPrice = Node17('body', '', [Node17('div', 'hero', 'Welcome to the store, shop the latest deals and offers today')]);
+  var d18 = runDiag17('tatacliq.com', noPrice), l18 = core.describe({ store: 'Tata CLiQ', state: 'no_listings', reason: 'x', ms: 1000, mode: 'hidden', loaded: false, tries: 3, diag: d18 });
+  ok(d18.priceLeaves === 0 && d18.chains.length === 0 && d18.sameLinks === 0 && /price items 0/.test(l18) && /text: Welcome to the store/.test(l18) && d18.sample.length <= 200, 'T18 page without prices shows counts and a text sample (max 200 chars)');
+  var noLink = Node17('body', '', [Node17('div', 'a1', [Node17('div', 'a2', [Node17('span', 'price', 'Rs. 50')])])]);
+  var d19 = runDiag17('myntra.com', noLink);
+  ok(d19.chains.length === 1 && d19.chains[0].stop === -1 && /no card box in 7 steps/.test(core.describe({ store: 'Myntra', state: 'no_listings', reason: 'x', ms: 1, mode: 'hidden', tries: 3, diag: d19 })), 'T19 price without any link above it is reported as no card box');
   // T10 empty query refused
   var thrown = false; try { await core.runAll(mockApi({}), '   ', fast); } catch (_) { thrown = true; }
   ok(thrown, 'T10 empty query refused');
