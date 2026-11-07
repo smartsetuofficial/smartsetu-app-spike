@@ -1,8 +1,6 @@
 name: Build debug APK (S13-1 spike)
 on:
   workflow_dispatch:
-  push:
-    branches: [main]
 jobs:
   apk:
     runs-on: ubuntu-latest
