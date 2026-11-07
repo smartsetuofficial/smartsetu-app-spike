@@ -123,7 +123,7 @@ var fast = { pagesnapSrc: pagesnapSrc, loadMs: 200, settleMs: 5, readMs: 300, di
     var sent = [], all = body.desc();
     var ctx = { URL: URL, String: String, JSON: JSON, window: { innerWidth: 433, innerHeight: 870, mobileApp: { postMessage: function (m) { sent.push(m.detail); } } },
       location: { hostname: 'www.' + host, href: 'https://www.' + host + '/s' }, getComputedStyle: function (e) { return { textDecorationLine: e.struck ? 'line-through' : 'none' }; },
-      document: { readyState: 'complete', visibilityState: 'hidden', title: 'T', body: body, querySelectorAll: function (q) { return q === 'body *' ? all : all.filter(function (x) { return x.tagName === 'A' && x.href; }); } } };
+      document: { readyState: 'complete', visibilityState: 'hidden', title: 'T', body: body, querySelectorAll: function (q) { return q === 'body *' ? all : q === 'script' ? all.filter(function (x) { return x.tagName === 'SCRIPT'; }) : all.filter(function (x) { return x.tagName === 'A' && x.href; }); } } };
     vm.runInNewContext(core.buildDiagCode('k'), ctx);
     return sent[0];
   };
@@ -141,6 +141,24 @@ var fast = { pagesnapSrc: pagesnapSrc, loadMs: 200, settleMs: 5, readMs: 300, di
   var noLink = Node17('body', '', [Node17('div', 'a1', [Node17('div', 'a2', [Node17('span', 'price', 'Rs. 50')])])]);
   var d19 = runDiag17('myntra.com', noLink);
   ok(d19.chains.length === 1 && d19.chains[0].stop === -1 && /no card box in 7 steps/.test(core.describe({ store: 'Myntra', state: 'no_listings', reason: 'x', ms: 1, mode: 'hidden', tries: 3, diag: d19 })), 'T19 price without any link above it is reported as no card box');
+  // T20/T21 link box text + inline script check (S13-4): same code on every store host (D-073)
+  var okBox = true;
+  core.STORES.forEach(function (st) {
+    var host = new URL(st.url('x')).hostname.replace(/^www\./, '');
+    var page = Node17('body', '', [
+      Node17('a', '', 'Share', { href: 'https://www.' + host + '/share' }),
+      Node17('div', 'g', [Node17('a', '', 'Boat Rockerz Zen ANC Wireless Neckband Earphones', { href: 'https://www.' + host + '/boat-rockerz-zen-anc-wireless-neckband/p-mp000000001' }), Node17('span', '', 'Rs 1,299'), Node17('span', '', 'Free delivery by tomorrow evening')]),
+      Node17('a', '', 'Boat Bassheads 55 Wired Earphones with 10mm Drivers', { href: 'https://www.' + host + '/bassheads-55-wired-earphones-with-10mm-drivers/p-mp000000003' })
+    ]);
+    var d = runDiag17(host, page);
+    var line = core.describe({ store: st.label, state: 'no_listings', reason: 'x', ms: 1, mode: 'hidden', tries: 3, diag: d });
+    if (!(d.boxes.length === 2 && d.boxes[0].up === 1 && /Boat Rockerz Zen ANC.*Rs 1,299/.test(d.boxes[0].box) && /bassheads-55/.test(d.boxes[1].path) && /link box \/boat-rockerz/.test(line) && /scripts 0 /.test(line))) { okBox = false; console.log('T20 detail', st.key, JSON.stringify(d.boxes)); }
+  });
+  ok(okBox, 'T20 product-like link boxes (skips short nav links) on every store host');
+  var jsPage = Node17('body', '', [Node17('span', 'p', 'Rs. 1,099'), Node17('span', 'm', 'Rs. 3,990', { struck: true }), Node17('script', '', 'window.__state = {"products":[{"price":1099}]};' + ' '.repeat(2100)), Node17('script', '', 'var x = 1;')]);
+  jsPage.children[3].type = 'application/ld+json';
+  var d21 = runDiag17('myntra.com', jsPage), l21 = core.describe({ store: 'Myntra', state: 'no_listings', reason: 'x', ms: 1, mode: 'hidden', tries: 3, diag: d21 });
+  ok(d21.scripts.n === 2 && d21.scripts.ld === 1 && d21.scripts.big === 1 && d21.scripts.pd === '1099' && d21.scripts.hit === 1 && /^\d+:window\.__state/.test(d21.scripts.head[0]) && /no product-like link/.test(l21) && /price digits 1099 found in 1/.test(l21), 'T21 inline scripts: count, ld+json, big head, price digits found');
   // T10 empty query refused
   var thrown = false; try { await core.runAll(mockApi({}), '   ', fast); } catch (_) { thrown = true; }
   ok(thrown, 'T10 empty query refused');

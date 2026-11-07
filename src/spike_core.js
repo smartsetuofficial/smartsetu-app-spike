@@ -1,4 +1,4 @@
-/* smartsetu app-spike / spike_core v0.3 (S13-1, S13-2: reread, state report, visible/UA modes; S13-3: page structure dump). TEST ONLY, not the product.
+/* smartsetu app-spike / spike_core v0.4 (S13-1, S13-2: reread, state report, visible/UA modes; S13-3: page structure dump; S13-4: link box text + inline script check). TEST ONLY, not the product.
  * Reads ONE store search page in a hidden webview, one store after another (never in parallel), only when the owner taps the button.
  * The page is read with pagesnap.js (same file as the extension) and parsed with bundle.js parseSearch (same file as the extension).
  * No login, no cookies read, no storage, no network from here. Store list and URLs are copied from extension/runner_core.js (tab-only stores). */
@@ -38,9 +38,9 @@ function diagFn(K) {
   try {
     var pr = /^(?:Price\s*:?\s*)?(?:\u20B9|Rs\.?)\s?\d[\d,]*(?:\.\d+)?\.?$/i, leaves = [], all = document.querySelectorAll("body *"), i;
     for (i = 0; i < all.length; i++) { if (all[i].children.length === 0 && pr.test((all[i].textContent || "").trim())) leaves.push(all[i]); }
-    var host = location.hostname.replace(/^www\./, ""), as = document.querySelectorAll("a[href]"), same = 0, paths = [];
+    var host = location.hostname.replace(/^www\./, ""), as = document.querySelectorAll("a[href]"), same = 0, paths = [], sameEls = [];
     for (i = 0; i < as.length; i++) {
-      try { var u = new URL(as[i].href); if (u.pathname !== "/" && (u.hostname === host || u.hostname === "www." + host || u.hostname.slice(-host.length - 1) === "." + host)) { same++; if (paths.length < 3) paths.push(u.pathname.slice(0, 60)); } } catch (e) {}
+      try { var u = new URL(as[i].href); if (u.pathname !== "/" && (u.hostname === host || u.hostname === "www." + host || u.hostname.slice(-host.length - 1) === "." + host)) { same++; sameEls.push(as[i]); if (paths.length < 3) paths.push(u.pathname.slice(0, 60)); } } catch (e) {}
     }
     function struck(e) { try { return getComputedStyle(e).textDecorationLine.indexOf("line-through") >= 0; } catch (e2) { return false; } }
     var nonStruck = 0, chains = [];
@@ -55,7 +55,23 @@ function diagFn(K) {
       }
       chains.push({ price: (leaves[i].textContent || "").trim().slice(0, 14), struck: struck(leaves[i]), up: up, stop: stop });
     }
-    send({ kind: "diag", key: K, readyState: document.readyState, visibility: document.visibilityState, w: window.innerWidth, h: window.innerHeight, links: as.length, sameLinks: same, paths: paths, priceLeaves: leaves.length, nonStruck: nonStruck, chains: chains, textLen: ((document.body && document.body.innerText) || "").length, sample: ((document.body && document.body.innerText) || "").replace(/\s+/g, " ").trim().slice(0, 200), url: location.href, title: document.title });
+    var boxes = [], node, k2, pth;
+    for (i = 0; i < sameEls.length && boxes.length < 2; i++) {
+      try { pth = new URL(sameEls[i].href).pathname; } catch (e3) { continue; }
+      if (pth.length < 25) continue;
+      node = sameEls[i]; k2 = 0;
+      while ((node.innerText || "").length < 80 && k2 < 5 && node.parentElement) { node = node.parentElement; k2++; }
+      boxes.push({ path: pth.slice(0, 40), up: k2, box: (node.innerText || "").replace(/\s+/g, " ").trim().slice(0, 120) });
+    }
+    var pd = "", scs = document.querySelectorAll("script"), hit = 0, big = 0, ld = 0, head = [], tx;
+    for (i = 0; i < leaves.length; i++) { if (!struck(leaves[i])) { pd = (leaves[i].textContent || "").replace(/[^0-9]/g, ""); break; } }
+    for (i = 0; i < scs.length; i++) {
+      tx = scs[i].textContent || "";
+      if (scs[i].type === "application/ld+json") ld++;
+      if (tx.length > 2000) { big++; if (head.length < 3) head.push(tx.length + ":" + tx.replace(/\s+/g, " ").trim().slice(0, 50)); }
+      if (pd.length > 2 && tx.indexOf(pd) >= 0) hit++;
+    }
+    send({ kind: "diag", key: K, boxes: boxes, scripts: { n: scs.length, ld: ld, big: big, pd: pd, hit: hit, head: head }, readyState: document.readyState, visibility: document.visibilityState, w: window.innerWidth, h: window.innerHeight, links: as.length, sameLinks: same, paths: paths, priceLeaves: leaves.length, nonStruck: nonStruck, chains: chains, textLen: ((document.body && document.body.innerText) || "").length, sample: ((document.body && document.body.innerText) || "").replace(/\s+/g, " ").trim().slice(0, 200), url: location.href, title: document.title });
   } catch (e) { send({ kind: "diag", key: K, error: String((e && e.message) || e) }); }
 }
 function buildDiagCode(key) { return 'var K = ' + JSON.stringify(key) + ';\n(' + diagFn.toString() + ')(K);\n'; }
@@ -155,6 +171,12 @@ function describe(r) {
     s += '\n   same-site links ' + g.sameLinks + (g.paths && g.paths.length ? ' e.g. ' + g.paths.join(' , ') : '') + ', price items not struck ' + g.nonStruck;
     g.chains.forEach(function (c) { s += '\n   price ' + c.price + (c.struck ? ' (struck)' : '') + ' -> ' + c.up.join(' > ') + (c.stop > 0 ? ' [card at step ' + c.stop + ']' : ' [no card box in 7 steps]'); });
     if (g.sample) s += '\n   text: ' + g.sample;
+  }
+  if (r.diag && !r.diag.error && r.diag.boxes) {
+    var h2 = r.diag;
+    if (!h2.boxes.length) s += '\n   no product-like link (path 25+ chars)';
+    h2.boxes.forEach(function (b) { s += '\n   link box ' + b.path + ' (up ' + b.up + '): ' + b.box; });
+    if (h2.scripts) s += '\n   scripts ' + h2.scripts.n + ' (ld+json ' + h2.scripts.ld + ', big ' + h2.scripts.big + '), price digits ' + (h2.scripts.pd || '-') + ' found in ' + h2.scripts.hit + (h2.scripts.head.length ? ', big: ' + h2.scripts.head.join(' | ') : '');
   }
   return s;
 }
