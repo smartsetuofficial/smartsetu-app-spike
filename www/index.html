@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SmartSetu Spike</title>
+<style>
+  body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; padding-top: calc(16px + env(safe-area-inset-top, 0px)); background: #fff; color: #111; }
+  h1 { font-size: 18px; margin: 0 0 4px; }
+  p { font-size: 13px; color: #444; margin: 0 0 12px; }
+  input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; border: 1px solid #888; border-radius: 8px; }
+  button { width: 100%; margin-top: 10px; font-size: 16px; padding: 12px; border: 0; border-radius: 8px; background: #0b57d0; color: #fff; }
+  button:disabled { background: #888; }
+  #stage { margin-top: 12px; font-size: 14px; font-weight: 600; }
+  #out { white-space: pre-wrap; font-size: 13px; margin-top: 8px; word-break: break-word; }
+  #ua { font-size: 11px; color: #666; margin-top: 12px; word-break: break-word; }
+</style>
+</head>
+<body>
+<h1>SmartSetu Spike (test only)</h1>
+<p>Tap the button. The app opens Myntra, Meesho and Tata CLiQ search pages out of sight, one by one, and counts the listings it can read.</p>
+<input id="q" value="boat airdopes 141" autocomplete="off">
+<button id="go">Run test</button>
+<div id="stage"></div>
+<div id="out"></div>
+<div id="ua"></div>
+<script src="bundle.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
