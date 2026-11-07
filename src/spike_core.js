@@ -1,4 +1,4 @@
-/* smartsetu app-spike / spike_core v0.5 (S13-1, S13-2: reread, state report, visible/UA modes; S13-3: page structure dump; S13-4: link box text + inline script check; S13-5: split/label price items, JSON key path dump, box leaf dump). TEST ONLY, not the product.
+/* smartsetu app-spike / spike_core v0.6 (S13-6: JSON keys tree + scroll recount; S13-1, S13-2: reread, state report, visible/UA modes; S13-3: page structure dump; S13-4: link box text + inline script check; S13-5: split/label price items, JSON key path dump, box leaf dump). TEST ONLY, not the product.
  * Reads ONE store search page in a hidden webview, one store after another (never in parallel), only when the owner taps the button.
  * The page is read with pagesnap.js (same file as the extension) and parsed with bundle.js parseSearch (same file as the extension).
  * No login, no cookies read, no storage, no network from here. Store list and URLs are copied from extension/runner_core.js (tab-only stores). */
@@ -75,7 +75,29 @@ function diagFn(K) {
       if (tx.length > 2000) { big++; if (head.length < 3) head.push(tx.length + ":" + tx.replace(/\s+/g, " ").trim().slice(0, 50)); }
       if (pd.length > 2 && tx.indexOf(pd) >= 0) { hit++; if (hits.length < 3) hits.push({ ld: scs[i].type === "application/ld+json", len: tx.length, head: tx.replace(/\s+/g, " ").trim().slice(0, 40), tx: tx }); }
     }
-    var J = [], LF = [], ldInfo = [], kk;
+    var J = [], LF = [], ldInfo = [], kk, TR = [];
+    var diagOut = function (o) { var n0 = leaves.length, t0 = ((document.body && document.body.innerText) || "").length; try { window.scrollTo(0, 1000000); } catch (e8) {} setTimeout(function () { var n1 = 0, a2 = document.querySelectorAll("body *"), q2; try { for (q2 = 0; q2 < a2.length; q2++) { if (isP(a2[q2])) n1++; } o.scroll = { before: n0, after: n1, t0: t0, t1: ((document.body && document.body.innerText) || "").length }; } catch (e9) {} send(o); }, 1500); };
+    var scal = function (v) { return v === null ? "null" : typeof v === "string" ? "s" + v.length : typeof v; };
+    var tree = function (o, dep, cap) {
+      var ks, j, v, nm, lim = TR.length + cap;
+      if (o === null || typeof o !== "object" || dep > 7) return;
+      if (Array.isArray(o)) { if (o.length && o[0] !== null && typeof o[0] === "object") tree(o[0], dep, lim - TR.length); return; }
+      ks = Object.keys(o);
+      for (j = 0; j < ks.length && TR.length < lim; j++) {
+        v = o[ks[j]]; nm = ks[j].slice(0, 22);
+        if (v !== null && typeof v === "object") { TR.push(dep + " " + nm + (Array.isArray(v) ? "[" + v.length + "]" : "{}")); tree(v, dep + 1, lim - TR.length); }
+        else TR.push(dep + " " + nm + ":" + scal(v) + (/^(?:itemType|type|layoutType)$/.test(nm) && typeof v === "string" && v.length < 25 ? "=" + v : ""));
+      }
+    };
+    var mkTree = function (root, p) {
+      var cur = root, jj, arr = null, ai = -1, ix = -1, it, mm = -1;
+      for (jj = 0; jj < p.length; jj++) { cur = cur[p[jj]]; if (Array.isArray(cur) && jj + 1 < p.length) { arr = cur; ai = jj; ix = Number(p[jj + 1]); } }
+      if (!arr || isNaN(ix)) { tree(root, 0, 38); return; }
+      TR.push("ARR " + String(p[ai]).slice(0, 22) + "[" + arr.length + "] hit at " + ix);
+      for (jj = 0; jj < arr.length && jj < 6; jj++) { it = arr[jj]; if (it !== null && typeof it === "object") { TR.push("i" + jj + " " + Object.keys(it).slice(0, 7).map(function (s) { return s.slice(0, 14); }).join(",") + (typeof it.itemType === "string" && it.itemType.length < 25 ? "=" + it.itemType : "")); if (mm < 0 && jj !== ix) mm = jj; } }
+      tree(arr[ix], 0, 36);
+      if (mm >= 0) { TR.push("OTHER i" + mm); tree(arr[mm], 0, 30); }
+    };
     var jparse = function (t, isLd) {
       var st = 0, m, d = 0, inS = false, esc = false, c, z, op;
       if (isLd) { st = t.search(/\S/); if (st < 0) st = 0; } else { m = /^\s*(?:window\.[\w$.]+|self\.[\w$.]+|var\s+[\w$]+|let\s+[\w$]+|const\s+[\w$]+)\s*=\s*/.exec(t); st = m ? m[0].length : 0; }
@@ -103,6 +125,7 @@ function diagFn(K) {
       var hj = jparse(hits[i].tx, hits[i].ld), item = { len: hits[i].len, head: hits[i].head, ld: hits[i].ld }, outp = [];
       if (hj.fail) item.fail = hj.fail; else { wk(hj.v, [], pd, outp); item.paths = outp.map(function (p) { return { p: p.join(".").slice(0, 120), arr: arrOf(hj.v, p) }; }); }
       J.push(item);
+      if (!TR.length && outp.length && !hj.fail) { try { mkTree(hj.v, outp[0]); } catch (e10) {} }
     }
     for (i = 0; i < scs.length && ldInfo.length < 4; i++) {
       if (scs[i].type !== "application/ld+json") continue;
@@ -130,7 +153,7 @@ function diagFn(K) {
         }
       }
     } catch (e6) {}
-    send({ kind: "diag", key: K, boxes: boxes, json: J, ld: ldInfo, lf: LF, scripts: { n: scs.length, ld: ld, big: big, pd: pd, hit: hit, head: head }, readyState: document.readyState, visibility: document.visibilityState, w: window.innerWidth, h: window.innerHeight, links: as.length, sameLinks: same, paths: paths, priceLeaves: leaves.length, nonStruck: nonStruck, chains: chains, textLen: ((document.body && document.body.innerText) || "").length, sample: ((document.body && document.body.innerText) || "").replace(/\s+/g, " ").trim().slice(0, 200), url: location.href, title: document.title });
+    diagOut({ kind: "diag", key: K, boxes: boxes, json: J, tree: TR, ld: ldInfo, lf: LF, scripts: { n: scs.length, ld: ld, big: big, pd: pd, hit: hit, head: head }, readyState: document.readyState, visibility: document.visibilityState, w: window.innerWidth, h: window.innerHeight, links: as.length, sameLinks: same, paths: paths, priceLeaves: leaves.length, nonStruck: nonStruck, chains: chains, textLen: ((document.body && document.body.innerText) || "").length, sample: ((document.body && document.body.innerText) || "").replace(/\s+/g, " ").trim().slice(0, 200), url: location.href, title: document.title });
   } catch (e) { send({ kind: "diag", key: K, error: String((e && e.message) || e) }); }
 }
 function buildDiagCode(key) { return 'var K = ' + JSON.stringify(key) + ';\n(' + diagFn.toString() + ')(K);\n'; }
@@ -239,6 +262,8 @@ function describe(r) {
     if (h2.json) h2.json.forEach(function (j) { s += '\n   json in script (' + j.len + (j.ld ? ', ld+json' : '') + ') ' + j.head + ' -> ' + (j.fail ? 'not parsed: ' + j.fail : (j.paths.length ? j.paths.map(function (p) { return 'path ' + p.p + (p.arr ? ' [list ' + p.arr.p + ' n=' + p.arr.n + ' keys ' + p.arr.keys.join(',') + ']' : ''); }).join(' ; ') : 'digits not found as a value')); });
     if (h2.ld) h2.ld.forEach(function (j) { s += '\n   ld+json ' + (j.fail ? 'not parsed: ' + j.fail : j.t + ' items ' + j.n + ' keys ' + j.k.join(',') + (j.ik.length ? ' item keys ' + j.ik.join(',') : '')); });
     if (h2.lf && h2.lf.length) s += '\n   box leaves: ' + h2.lf.join(' | ');
+    if (h2.scroll) s += '\n   after one scroll: price items ' + h2.scroll.before + ' -> ' + h2.scroll.after + ', text ' + h2.scroll.t0 + ' -> ' + h2.scroll.t1 + ' chars';
+    if (h2.tree && h2.tree.length) s += '\n   json tree: ' + h2.tree.join(' | ');
   }
   return s;
 }

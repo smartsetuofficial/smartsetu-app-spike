@@ -121,7 +121,7 @@ var fast = { pagesnapSrc: pagesnapSrc, loadMs: 200, settleMs: 5, readMs: 300, di
   };
   var runDiag17 = function (host, body) {
     var sent = [], all = body.desc();
-    var ctx = { URL: URL, String: String, JSON: JSON, window: { innerWidth: 433, innerHeight: 870, mobileApp: { postMessage: function (m) { sent.push(m.detail); } } },
+    var ctx = { URL: URL, String: String, JSON: JSON, setTimeout: function (f) { f(); }, window: { scrollTo: function () { if (body.grow) all.push(body.grow); }, innerWidth: 433, innerHeight: 870, mobileApp: { postMessage: function (m) { sent.push(m.detail); } } },
       location: { hostname: 'www.' + host, href: 'https://www.' + host + '/s' }, getComputedStyle: function (e) { return { textDecorationLine: e.struck ? 'line-through' : 'none' }; },
       document: { readyState: 'complete', visibilityState: 'hidden', title: 'T', body: body, querySelectorAll: function (q) { return q === 'body *' ? all : q === 'script' ? all.filter(function (x) { return x.tagName === 'SCRIPT'; }) : all.filter(function (x) { return x.tagName === 'A' && x.href; }); } } };
     vm.runInNewContext(core.buildDiagCode('k'), ctx);
@@ -159,6 +159,17 @@ var fast = { pagesnapSrc: pagesnapSrc, loadMs: 200, settleMs: 5, readMs: 300, di
   jsPage.children[3].type = 'application/ld+json';
   var d21 = runDiag17('myntra.com', jsPage), l21 = core.describe({ store: 'Myntra', state: 'no_listings', reason: 'x', ms: 1, mode: 'hidden', tries: 3, diag: d21 });
   ok(d21.scripts.n === 2 && d21.scripts.ld === 1 && d21.scripts.big === 1 && d21.scripts.pd === '1099' && d21.scripts.hit === 1 && /^\d+:window\.__state/.test(d21.scripts.head[0]) && /no product-like link/.test(l21) && /price digits 1099 found in 1/.test(l21), 'T21 inline scripts: count, ld+json, big head, price digits found');
+  // T22 Myntra-style JSON state: keys tree + scroll recount (S13-6), same code on every store host (D-073)
+  var st22 = { layout: { pages: { p1: { response: { page: { layout: { components: [ { id: 'a', itemType: 'PRODUCT', itemData: { data: { productInfo: { price: 1099, title: 'SECRETTITLE', url: 'y' } } }, hash: 'h' }, { id: 'b', itemType: 'GRID', itemData: { data: { items: [ { price: 2, title: 'n' }, {} ] } }, hash: 'h2' }, { id: 'c', itemType: 'BANNER', itemData: {}, hash: 'h3' } ] } } } } } } };
+  var page22 = function () { var b = Node17('body', '', [Node17('span', 'p', 'Rs. 1,099'), Node17('span', 'm', 'Rs. 3,990', { struck: true }), Node17('script', '', 'window.__REDUX_STATE__ = ' + JSON.stringify(st22) + ' '.repeat(2100))]); b.grow = Node17('span', 'p2', 'Rs. 499'); return b; };
+  var okT = true;
+  core.STORES.forEach(function (st) {
+    var host = new URL(st.url('x')).hostname.replace(/^www\./, ''), d = runDiag17(host, page22()), tr = d.tree || [];
+    var line = core.describe({ store: st.label, state: 'no_listings', reason: 'x', ms: 1, mode: 'hidden', tries: 3, diag: d });
+    if (!(tr[0] === 'ARR components[3] hit at 0' && tr[1] === 'i0 id,itemType,itemData,hash=PRODUCT' && tr[3] === 'i2 id,itemType,itemData,hash=BANNER' && tr.indexOf('3 price:number') >= 0 && tr.indexOf('OTHER i1') >= 0 && tr.indexOf('2 items[2]') >= 0 && d.scroll && d.scroll.before === 2 && d.scroll.after === 3 && /json tree: ARR components\[3\]/.test(line) && /after one scroll: price items 2 -> 3/.test(line))) { okT = false; console.log('T22 detail', st.key, JSON.stringify(tr.slice(0, 12)), JSON.stringify(d.scroll)); }
+  });
+  ok(okT, 'T22 JSON keys tree (list, items, hit item, other item) and scroll recount on every store host');
+  ok(runDiag17('myntra.com', page22()).tree.join('|').indexOf('SECRETTITLE') < 0, 'T23 tree shows keys, types and lengths only: product text never shown')
   // T10 empty query refused
   var thrown = false; try { await core.runAll(mockApi({}), '   ', fast); } catch (_) { thrown = true; }
   ok(thrown, 'T10 empty query refused');
