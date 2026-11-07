@@ -9,6 +9,7 @@
   h1 { font-size: 18px; margin: 0 0 4px; }
   p { font-size: 13px; color: #444; margin: 0 0 12px; }
   input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; border: 1px solid #888; border-radius: 8px; }
+  select { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; margin-top: 10px; border: 1px solid #888; border-radius: 8px; background: #fff; }
   button { width: 100%; margin-top: 10px; font-size: 16px; padding: 12px; border: 0; border-radius: 8px; background: #0b57d0; color: #fff; }
   button:disabled { background: #888; }
   #stage { margin-top: 12px; font-size: 14px; font-weight: 600; }
@@ -20,6 +21,7 @@
 <h1>SmartSetu Spike (test only)</h1>
 <p>Tap the button. The app opens Myntra, Meesho and Tata CLiQ search pages out of sight, one by one, and counts the listings it can read.</p>
 <input id="q" value="boat airdopes 141" autocomplete="off">
+<select id="mode"><option value="hidden">Hidden window</option><option value="visible">Visible window (debug)</option><option value="ua">Hidden + Chrome-style user agent</option></select>
 <button id="go">Run test</button>
 <div id="stage"></div>
 <div id="out"></div>

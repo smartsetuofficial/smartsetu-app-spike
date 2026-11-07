@@ -1,4 +1,4 @@
-/* smartsetu app-spike / app v0.1 (S13-1). Glue only: plugin calls + screen. Logic is in spike_core.js (tested in Node). */
+/* smartsetu app-spike / app v0.2 (S13-2). Glue only: plugin calls + screen. Logic is in spike_core.js (tested in Node). */
 import { InAppBrowser, InvisibilityMode } from '@capgo/capacitor-inappbrowser';
 var core = require('./spike_core.js');
 
@@ -7,7 +7,12 @@ var running = false;
 
 function pluginApi() {
   return {
-    open: function (o) { return InAppBrowser.openWebView({ url: o.url, hidden: true, invisibilityMode: InvisibilityMode.FAKE_VISIBLE }).then(function (r) { return r && r.id; }); },
+    open: function (o) {
+      var opt = { url: o.url };
+      if (!o.visible) { opt.hidden = true; opt.invisibilityMode = InvisibilityMode.FAKE_VISIBLE; }
+      if (o.ua) opt.customUserAgent = o.ua;
+      return InAppBrowser.openWebView(opt).then(function (r) { return r && r.id; });
+    },
     exec: function (o) { return InAppBrowser.executeScript({ id: o.id, code: o.code }); },
     close: function (o) { return InAppBrowser.close({ id: o.id }); },
     onMessage: function (fn) { return InAppBrowser.addListener('messageFromWebview', fn).then(function (h) { return function () { h.remove(); }; }); },
@@ -23,7 +28,7 @@ async function go() {
   try {
     var src = await (await fetch('pagesnap.js')).text();
     var all = await core.runAll(pluginApi(), $('q').value, {
-      pagesnapSrc: src,
+      pagesnapSrc: src, mode: $('mode').value, ua: navigator.userAgent, rereads: 2,
       onStage: function (t) { $('stage').textContent = t; },
       onResult: function (r) { $('out').textContent += core.describe(r) + '\n\n'; }
     });

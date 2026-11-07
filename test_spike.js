@@ -27,13 +27,19 @@ function mockApi(opts) {
   var listeners = [], loadL = [], calls = { open: [], close: [], exec: 0 }, nextId = 0;
   return {
     calls: calls, listenersLeft: function () { return listeners.length + loadL.length; },
-    open: function (o) { calls.open.push(o.url); var id = 'w' + (++nextId); if (!opts.noLoad) setTimeout(function () { loadL.forEach(function (f) { f({ id: id }); }); }, 5); return Promise.resolve(id); },
+    open: function (o) { calls.open.push(o.url); (calls.openOpts = calls.openOpts || []).push(o); var id = 'w' + (++nextId); if (!opts.noLoad) setTimeout(function () { loadL.forEach(function (f) { f({ id: id }); }); }, 5); return Promise.resolve(id); },
     exec: function (o) {
       calls.exec++;
       var key = /var K = "([a-z]+)"/.exec(o.code)[1];
+      if (/kind: "diag"/.test(o.code)) {
+        if (opts.silent) return Promise.resolve();
+        setTimeout(function () { listeners.forEach(function (f) { f({ detail: { kind: 'diag', key: key, readyState: 'complete', visibility: 'visible', w: 412, h: 900, links: 33, priceLeaves: 0, textLen: 1234, url: 'u', title: 't' } }); }); }, 5);
+        return Promise.resolve();
+      }
+      calls.snapN = (calls.snapN || 0) + 1;
       if (opts.silent) return Promise.resolve();
       var sent = [];
-      var fake = 'async function smartsetuCollect(q) { ' + (opts.pageError ? 'throw new Error("boom");' : 'return ' + JSON.stringify(opts.snap(key)) + ';') + ' }';
+      var fake = 'async function smartsetuCollect(q) { ' + (opts.pageError ? 'throw new Error("boom");' : 'return ' + JSON.stringify(opts.snap(key, calls.snapN)) + ';') + ' }';
       var code = o.code.replace(pagesnapSrc, fake);
       var ctx = { window: { mobileApp: { postMessage: function (m) { sent.push(m); } } }, location: { href: HOST[key] }, document: { title: 'T' }, JSON: JSON, String: String };
       vm.runInNewContext(code, ctx);
@@ -47,7 +53,7 @@ function mockApi(opts) {
     parse: function (s) { return global.SmartSetu.parseSearch(s); }
   };
 }
-var fast = { pagesnapSrc: pagesnapSrc, loadMs: 200, settleMs: 5, readMs: 300 };
+var fast = { pagesnapSrc: pagesnapSrc, loadMs: 200, settleMs: 5, readMs: 300, diagMs: 150, rereadMs: 5 };
 
 (async function () {
   if (!fxSnap) { console.log('SKIP fixture-based tests: no captured snapshot found next to the package'); }
@@ -86,6 +92,23 @@ var fast = { pagesnapSrc: pagesnapSrc, loadMs: 200, settleMs: 5, readMs: 300 };
   ok(r9.state === 'error' && /open failed/.test(r9.reason) && a9.listenersLeft() === 0, 'T9 open error, listeners cleaned');
   // T12 a message from another store key is ignored
   if (fxSnap) { var r12 = await core.runStore(mockApi({ stray: true, snap: function () { var s = JSON.parse(JSON.stringify(fxSnap)); s.url = 'https://www.amazon.in/s?k=x'; return s; } }), core.STORES[0], 'x', fast); ok(r12.state === 'ok' && r12.parsed > 0, 'T12 stray message of another key ignored'); }
+  // T13 first read empty, second read has cards (late-drawing page): read again, state ok
+  if (fxSnap) {
+    var late = function (key, n) { if (n === 1) return { v: 1, url: 'https://www.myntra.com/x', title: 'T', cards: [] }; var s = JSON.parse(JSON.stringify(fxSnap)); s.url = 'https://www.amazon.in/s?k=x'; return s; };
+    var a13 = mockApi({ snap: late }), r13 = await core.runStore(a13, core.STORES[0], 'x', Object.assign({}, fast, { rereads: 2 }));
+    ok(r13.state === 'ok' && r13.tries === 2 && a13.calls.exec === 2 && !r13.diag, 'T13 empty then cards on 2nd read = ok, no state report needed');
+  }
+  // T14 always empty: 3 reads, then the page state is shown
+  var a14 = mockApi({ snap: function () { return { v: 1, url: 'https://www.tatacliq.com/', title: 'Home', cards: [] }; } });
+  var r14 = await core.runStore(a14, core.STORES[2], 'x', Object.assign({}, fast, { rereads: 2 }));
+  ok(r14.state === 'no_listings' && r14.tries === 3 && r14.diag && r14.diag.links === 33 && /price items 0/.test(core.describe(r14)) && /reads 3/.test(core.describe(r14)), 'T14 empty 3 times then state report');
+  // T15 chromeUa from the real phone user agent
+  var wv = 'Mozilla/5.0 (Linux; Android 17; motorola edge 60 fusion Build/A171VCH.41-15; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/156.0.8078.47 Mobile Safari/537.36';
+  ok(core.chromeUa(wv) === 'Mozilla/5.0 (Linux; Android 17; motorola edge 60 fusion Build/A171VCH.41-15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.8078.47 Mobile Safari/537.36', 'T15 chromeUa drops wv and Version only');
+  // T16 modes reach the plugin open call
+  var sil = function (mode) { var a = mockApi({ silent: true }); return core.runStore(a, core.STORES[0], 'x', Object.assign({}, fast, { mode: mode, ua: wv })).then(function () { return a.calls.openOpts[0]; }); };
+  var mh = await sil('hidden'), mv = await sil('visible'), mu = await sil('ua');
+  ok(mh.visible === false && !mh.ua && mv.visible === true && !mv.ua && mu.visible === false && mu.ua && mu.ua.indexOf('wv') < 0, 'T16 hidden/visible/ua modes passed to open');
   // T10 empty query refused
   var thrown = false; try { await core.runAll(mockApi({}), '   ', fast); } catch (_) { thrown = true; }
   ok(thrown, 'T10 empty query refused');
