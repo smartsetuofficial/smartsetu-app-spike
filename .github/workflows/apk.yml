@@ -1,4 +1,4 @@
-name: Build debug APK (S13-1 spike)
+name: Build debug APK (S14-1 app)
 on:
   workflow_dispatch:
 jobs:
@@ -28,6 +28,6 @@ jobs:
         run: ./gradlew assembleDebug --no-daemon
       - uses: actions/upload-artifact@v4
         with:
-          name: smartsetu-spike-debug-apk
+          name: smartsetu-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
           retention-days: 7

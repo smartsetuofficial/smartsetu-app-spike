@@ -3,30 +3,39 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<title>SmartSetu Spike</title>
+<title>SmartSetu - Compare prices</title>
+<link rel="stylesheet" href="compare.css">
 <style>
-  body { font-family: system-ui, sans-serif; margin: 0; padding: 16px; padding-top: calc(16px + env(safe-area-inset-top, 0px)); background: #fff; color: #111; }
-  h1 { font-size: 18px; margin: 0 0 4px; }
-  p { font-size: 13px; color: #444; margin: 0 0 12px; }
-  input { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; border: 1px solid #888; border-radius: 8px; }
-  select { width: 100%; box-sizing: border-box; font-size: 16px; padding: 10px; margin-top: 10px; border: 1px solid #888; border-radius: 8px; background: #fff; }
-  button { width: 100%; margin-top: 10px; font-size: 16px; padding: 12px; border: 0; border-radius: 8px; background: #0b57d0; color: #fff; }
-  button:disabled { background: #888; }
-  #stage { margin-top: 12px; font-size: 14px; font-weight: 600; }
-  #out { white-space: pre-wrap; font-size: 13px; margin-top: 8px; word-break: break-word; }
-  #ua { font-size: 11px; color: #666; margin-top: 12px; word-break: break-word; }
+  .top{padding-top:env(safe-area-inset-top,0px)}
+  .foot{padding-bottom:calc(48px + env(safe-area-inset-bottom,0px))}
+  .hero{padding-top:24px}
+  .beta{margin:12px 0 0;padding:8px 12px;border-radius:12px;background:#FEF3C7;color:#78350F;font-size:14px}
 </style>
 </head>
 <body>
-<h1>SmartSetu Spike (test only)</h1>
-<p>Tap the button. The app opens Myntra, Meesho and Tata CLiQ search pages out of sight, one by one, and counts the listings it can read.</p>
-<input id="q" value="boat airdopes 141" autocomplete="off">
-<select id="mode"><option value="hidden">Hidden window</option><option value="visible">Visible window (debug)</option><option value="ua">Hidden + Chrome-style user agent</option></select>
-<button id="go">Run test</button>
-<div id="stage"></div>
-<div id="out"></div>
-<div id="ua"></div>
+<header class="top"><div class="wrap"><span class="brand">SmartSetu</span><span class="tag">Ek Click, Best Deal</span></div></header>
+<main class="wrap">
+  <section class="hero">
+    <h1>Compare prices across stores</h1>
+    <p class="lead">Type what you want to buy. The app opens each store out of sight inside itself, reads the prices you would see, and lines them up here.</p>
+    <form id="form" class="search" autocomplete="off">
+      <label for="q" class="sr">What do you want to buy?</label>
+      <input id="q" type="search" placeholder="For example: boAt Airdopes 141" maxlength="120" required>
+      <button id="go" class="btn" type="submit">Compare</button>
+    </form>
+    <p class="privacy">Stores open only when you press Compare. Nothing is sent to our servers; the results stay on your phone.</p>
+    <p class="beta">Test version for the owner's own phone. It can take a few minutes because stores are read one after another.</p>
+  </section>
+  <p id="msg" class="msg" role="status" aria-live="polite"></p>
+  <section id="progress" class="card" hidden aria-label="Store progress"><h2>Checking stores</h2><ul id="plist" class="plist"></ul></section>
+  <section id="results" aria-live="polite"></section>
+  <section id="empty" class="empty"><h2>Nothing compared yet</h2><p>Your results will appear here. Search for a product name or model, or a type of product such as "red tape shoes for women".</p></section>
+</main>
+<footer class="wrap foot"><p id="footnote"></p></footer>
 <script src="bundle.js"></script>
+<script src="pagesnap.js"></script>
+<script src="runner_core.js"></script>
+<script src="view.js"></script>
 <script src="app.js"></script>
 </body>
 </html>

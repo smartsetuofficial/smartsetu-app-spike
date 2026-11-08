@@ -1,11 +1,11 @@
 {
-  "name": "smartsetu-app-spike",
-  "version": "0.1.0",
+  "name": "smartsetu-app",
+  "version": "0.2.0",
   "private": true,
-  "description": "SmartSetu S13-1 Android spike: hidden webview + pagesnap + bundle parser on 3 tab-only stores. Test only, not the product.",
+  "description": "SmartSetu Android app (S14-1 test build): the extension Compare screen on hidden webviews, 8 stores. Not released.",
   "scripts": {
     "build": "esbuild src/app.js --bundle --format=iife --outfile=www/app.js",
-    "test": "node test_spike.js"
+    "test": "node test_spike.js && node test_app.js"
   },
   "dependencies": {
     "@capacitor/android": "8.5.3",
