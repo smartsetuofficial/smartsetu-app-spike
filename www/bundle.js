@@ -3,7 +3,7 @@
  *   parser-core/parser.js 11b4d035c57b
  *   query-engine/query_engine.js f2dad556a1bf
  *   compare-engine/adapter.js fe1d9aec1030
- *   compare-engine/matching.js 1d9bae569d68
+ *   compare-engine/matching.js 09d0d2c9fd27
  *   compare-engine/offers.js e00ceee3c57b
  *   compare-engine/bestpick.js 225fe5414a85
  *   compare-engine/compare.js e1765a8594e5
@@ -655,7 +655,7 @@ defs['matching.js'] = function (module, exports, require) {
   else root.SmartSetuMatching = factory();
 })(typeof self !== 'undefined' ? self : this, function () {
   'use strict';
-  var VERSION = '1.1.0';
+  var VERSION = '1.2.0';
   var VARIANT_WORDS = ['anc', 'elite', 'pro', 'plus', 'max', 'lite', 'neo', 'prime', 'ultra', 'mini'];
   var COLORS = ['black', 'white', 'red', 'blue', 'green', 'grey', 'gray', 'pink', 'brown', 'beige', 'peach', 'maroon', 'purple', 'yellow', 'orange', 'silver', 'gold', 'nude', 'navy', 'burgundy', 'mauve', 'plum'];
   var UNITS = ['hr', 'hrs', 'hour', 'hours', 'h', 'ms', 'db', 'mm', 'mah', 'ml', 'g', 'gm', 'kg', 'l', 'w', 'hz', 'gb', 'tb', 'x', 'm'];
@@ -699,13 +699,19 @@ defs['matching.js'] = function (module, exports, require) {
       for (var n = 1; n <= 3 && !out.brand; n++) for (var i = 0; i + n <= tk.length; i++) if (tk.slice(i, i + n).join('') === brandKey) { out.brand = brandKey; for (var j = i; j < i + n; j++) brandAt[j] = 1; break; }
     }
     if (brandKey === 'apple' && !out.brand && tk.indexOf('iphone') >= 0) out.brand = 'apple'; // v1.1.0: iphone = apple
+    var raw = String(title || ''), ci = raw.indexOf(':'), headLen = tk.length, headCap = false;
+    if (ci > 0) {  // v1.2.0 (D-079): 'Name 512 GB: spec, spec' - model, variant, storage and content words come from the part before the first colon, colour/size/pack from the whole title
+      var hn = normTitle(raw.slice(0, ci)).split(' ').filter(Boolean);
+      if (hn.length < tk.length && hn.some(function (t, q) { return isModelToken(t, hn[q + 1] || null); })) headLen = hn.length;
+    }
+    headCap = tk.slice(0, headLen).some(function (t) { return /^\d+(?:gb|tb)$/.test(t); });
     var seen = {}, cap = [], ram = [];
     tk.forEach(function (t, i) {
       var next = tk[i + 1] || null, m;
-      if (isModelToken(t, next) && !seen['m' + t]) { seen['m' + t] = 1; out.models.push(t); }
-      if (/^gen\d$/.test(t) || (VARIANT_WORDS.indexOf(t) >= 0)) { if (!seen['v' + t]) { seen['v' + t] = 1; out.variants.push(t); } }
+      if (i < headLen && isModelToken(t, next) && !seen['m' + t]) { seen['m' + t] = 1; out.models.push(t); }
+      if (i < headLen && (/^gen\d$/.test(t) || (VARIANT_WORDS.indexOf(t) >= 0))) { if (!seen['v' + t]) { seen['v' + t] = 1; out.variants.push(t); } }
       if ((m = SIZE_RE.exec(t)) && !out.size) out.size = m[1] + (m[2] === 'gm' ? 'g' : m[2]);
-      if (/^\d+(?:gb|tb)$/.test(t)) { var arr = next === 'ram' ? ram : cap; if (arr.indexOf(t) < 0) arr.push(t); }  // v1.1.0 (D-072)
+      if ((i < headLen || !headCap) && /^\d+(?:gb|tb)$/.test(t)) { var arr = next === 'ram' ? ram : cap; if (arr.indexOf(t) < 0) arr.push(t); }  // v1.1.0 (D-072)
       if (t === 'pack' && tk[i + 1] === 'of' && /^\d+$/.test(tk[i + 2] || '')) out.pack = 'pack' + tk[i + 2];
       if (/^(trio|duo|combo)$/.test(t)) out.pack = out.pack || t;
       if (COLORS.indexOf(t) >= 0 && !seen['c' + t]) { seen['c' + t] = 1; out.colors.push(t === 'gray' ? 'grey' : t); }
@@ -715,7 +721,7 @@ defs['matching.js'] = function (module, exports, require) {
     // content tokens = what is left after brand, model, variant, colour, size, numbers and filler words (used to tell product lines apart)
     var seenC = {};
     tk.forEach(function (t, i) {
-      if (brandAt[i] || out.models.indexOf(t) >= 0 || out.variants.indexOf(t) >= 0 || COLORS.indexOf(t) >= 0 || SIZE_RE.test(t) || UNIT_TOKEN_RE.test(t) || /^\d+$/.test(t) || FILLER.indexOf(t) >= 0 || t.length < 3 || seenC[t]) return;
+      if (i >= headLen || brandAt[i] || out.models.indexOf(t) >= 0 || out.variants.indexOf(t) >= 0 || COLORS.indexOf(t) >= 0 || SIZE_RE.test(t) || UNIT_TOKEN_RE.test(t) || /^\d+$/.test(t) || FILLER.indexOf(t) >= 0 || t.length < 3 || seenC[t]) return;
       seenC[t] = 1; out.content.push(t);
     });
     return out;
