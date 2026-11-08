@@ -2,7 +2,7 @@
 'use strict';
 var fs = require('fs'), path = require('path'), vm = require('vm'), crypto = require('crypto');
 var W = require('./src/webtabs.js');
-var R = require('../extension/runner_core.js');
+var R = require('./www/runner_core.js');
 require('./www/bundle.js');
 var pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.log('FAIL: ' + m); } }
