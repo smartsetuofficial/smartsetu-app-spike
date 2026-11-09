@@ -159,6 +159,8 @@ function diagFn(K) {
 function buildDiagCode(key) { return 'var K = ' + JSON.stringify(key) + ';\n(' + diagFn.toString() + ')(K);\n'; }
 // Same shape as a Chrome Android user agent: the WebView marks ("; wv" and "Version/x.y") are removed. Derived from the real one, nothing invented.
 function chromeUa(ua) { return String(ua || '').replace('; wv)', ')').replace(/ Version\/\d+(\.\d+)?/, ''); }
+// S14-1d: desktop Chrome identity (same Chrome major as the phone). The stores that read fine on desktop Chrome but gave no cards with the phone layout get one more try with it.
+function desktopUa(ua) { var m = /Chrome\/(\d+)/.exec(String(ua || '')); return 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/' + (m ? m[1] : '120') + '.0.0.0 Safari/537.36'; }
 
 // api: { open({url, visible, ua}) -> id, exec({id, code}), close({id}), onMessage(fn) -> unsub, onLoaded(fn) -> unsub, parse(snap) -> parseSearch result }
 // o: { pagesnapSrc, mode: 'hidden'|'visible'|'ua', ua, loadMs, settleMs, readMs, rereads, rereadMs, onStage(text) }
@@ -268,5 +270,5 @@ function describe(r) {
   return s;
 }
 
-var api = { STORES: STORES, buildInjectCode: buildInjectCode, buildDiagCode: buildDiagCode, diagFn: diagFn, chromeUa: chromeUa, runStore: runStore, runAll: runAll, describe: describe, detailOf: detailOf };
+var api = { STORES: STORES, buildInjectCode: buildInjectCode, buildDiagCode: buildDiagCode, diagFn: diagFn, chromeUa: chromeUa, desktopUa: desktopUa, runStore: runStore, runAll: runAll, describe: describe, detailOf: detailOf };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

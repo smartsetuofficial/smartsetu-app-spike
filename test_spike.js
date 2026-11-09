@@ -105,6 +105,8 @@ var fast = { pagesnapSrc: pagesnapSrc, loadMs: 200, settleMs: 5, readMs: 300, di
   // T15 chromeUa from the real phone user agent
   var wv = 'Mozilla/5.0 (Linux; Android 17; motorola edge 60 fusion Build/A171VCH.41-15; wv) AppleWebKit/537.36 (KHTML, like Gecko) Version/4.0 Chrome/156.0.8078.47 Mobile Safari/537.36';
   ok(core.chromeUa(wv) === 'Mozilla/5.0 (Linux; Android 17; motorola edge 60 fusion Build/A171VCH.41-15) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.8078.47 Mobile Safari/537.36', 'T15 chromeUa drops wv and Version only');
+  // T15b desktopUa keeps the Chrome major of the phone (S14-1d)
+  ok(core.desktopUa(wv) === 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36' && /Chrome\/120\.0\.0\.0/.test(core.desktopUa('')) && !/Mobile|Android|wv/.test(core.desktopUa(wv)), 'T15b desktopUa');
   // T16 modes reach the plugin open call
   var sil = function (mode) { var a = mockApi({ silent: true }); return core.runStore(a, core.STORES[0], 'x', Object.assign({}, fast, { mode: mode, ua: wv })).then(function () { return a.calls.openOpts[0]; }); };
   var mh = await sil('hidden'), mv = await sil('visible'), mu = await sil('ua');

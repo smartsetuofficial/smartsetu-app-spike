@@ -161,6 +161,31 @@ function pageUndef() { return undefined; }
   ok(d8.anchors === 1 && d8.priceLeaves === 2 && d8.samples.length === 2 && d8.samples[0].price === '\u20b91,27,900' && /^span\.now < div\.pr < div\.card/.test(d8.samples[0].chain) && d8.samples[0].href === '/p/apple-iphone-17-pro/itm1' && /Apple iPhone 17 Pro/.test(d8.samples[0].text) && /div\.grid/.test(d8.samples[1].chain), 'E8 structureProbe gives price element chain, link and text of the card');
   ok(/Sample 1: /.test(W.structLines('Flipkart', { ok: true, result: d8 }).join('|')) && /could not read/.test(W.structLines('Croma', { ok: false, error: 'x' })[0]), 'E8 structLines');
 
+  // F: S14-1d (line shapes from the owner's phone 9 Nov 2026; the prose lines here are our own words)
+  var linesF = ['Apple iPhone 17 Pro 256 GB, Silver', 'MRP \u20b91,34,900.00 (Inclusive of all taxes)4% OFF', '10% up to Rs.15000 Instant Discount with IndusInd Bank Credit Card EMI', 'Flat Rs. 7000 Instant Discount with Kotak Bank Credit Card EMI', 'I love how premium this feels in my hand, the finish is great and the price is fair for what you get today.', 'Verdict: Great phone. Save your money for this one and look no further.', 'Save upto \u20b917,500', 'Exchange Offer', 'Offer Price', 'You Save', 'See all offers & discounts', 'Amazon Pay ICICI Bank Credit Card', 'EMI \u20b926,118 x 6m', 'Extra 35% off on First Order', 'Bank offers are many and you can check the bank site for the full list of card terms before you pay today', 'Premium EMI plans available', 'Premium finish and great price', 'Bank offer applies. Check details'];
+  var clicksF = [];
+  var docF = { title: 'T', body: { innerText: linesF.join('\n') }, querySelectorAll: function () { return [
+    { tagName: 'A', innerText: 'View all offers', getAttribute: function () { return '/offers/page'; }, click: function () { clicksF.push('navlink'); } },
+    { tagName: 'A', innerText: 'See all offers & discounts', getAttribute: function () { return '#'; }, click: function () { clicksF.push('hashlink'); } },
+    { tagName: 'BUTTON', innerText: 'Add to cart', click: function () { clicksF.push('cart'); } }]; } };
+  var pF = mockPlugin({ doc: docF }), wF = W.createWebTabs(pF.api);
+  var rF = await W.readPage(wF, 'https://www.amazon.in/dp/1', W.offerProbe, { settleMs: 5 }), dF = rF.result || {};
+  ok(rF.ok && clicksF.join() === 'hashlink' && dF.clicked === 1, 'F1 offerProbe clicks a link-less offers control, never a link that leaves the page, never Add to cart');
+  ok(dF.lines.join('|') === 'MRP \u20b91,34,900.00 (Inclusive of all taxes)4% OFF|10% up to Rs.15000 Instant Discount with IndusInd Bank Credit Card EMI|Flat Rs. 7000 Instant Discount with Kotak Bank Credit Card EMI|Save upto \u20b917,500|Amazon Pay ICICI Bank Credit Card|EMI \u20b926,118 x 6m|Extra 35% off on First Order|Premium EMI plans available', 'F2 offerProbe keeps offer lines and drops prose, titles and bare labels (premium is not EMI)');
+  var viewF = { top: null, groups: [{ rows: [{ store: 'Reliance Digital', url: 'https://www.reliancedigital.in/product/x' }, { store: 'Amazon', url: 'http://www.amazon.in/dp/B0HTTP' }, { store: 'Amazon', url: 'https://www.amazon.in/dp/B0X' }] }, { rows: [{ store: 'Croma', url: 'https://evil.example/p' }] }] };
+  ok(W.pickFromView(viewF, 'Amazon', 'https://www.amazon.in/s?k=a').url === 'https://www.amazon.in/dp/B0X' && W.pickFromView(viewF, 'Reliance Digital', 'https://www.reliancedigital.in/search').url === 'https://www.reliancedigital.in/product/x', 'F3 pickFromView takes the first https matched row of that store');
+  ok(/W\.pickFromView\(view, r\.store, st\.url\(q\)\)/.test(read('src/app.js')) && !/W\.pickProduct\(/.test(read('src/app.js')), 'F3b app opens the product page of a matched row only');
+  ok(W.pickFromView(viewF, 'Croma', 'https://www.croma.com/s') === null && W.pickFromView(viewF, 'Flipkart', 'https://www.flipkart.com/s') === null && W.pickFromView(null, 'Amazon', 'https://www.amazon.in/s') === null && W.pickFromView({ top: { rows: [{ store: 'Ajio', url: 'https://www.ajio.com/p/1' }] }, groups: [] }, 'Ajio', 'https://www.ajio.com/s').url === 'https://www.ajio.com/p/1', 'F3 no matched row, other site or no view gives null; the top table rows count');
+  var pD = mockPlugin(), wD = W.createWebTabs(pD.api);
+  await wD.tabs.create({ url: 'https://a.test/' }); var tD2 = await wD.tabs.create({ url: 'https://b.test/' }); await wD.tabs.remove(tD2.id); wD.dispose(); await sleep(5);
+  ok(pD.closed.length === 2, 'F4 dispose closes a page that is still open, a removed page is closed once');
+  ok(d8.linkSamples.length === 1 && d8.linkSamples[0] === '/p/apple-iphone-17-pro/itm1 "Apple iPhone 17 Pro"' && /Link 1: \/p\/apple/.test(W.structLines('Flipkart', { ok: true, result: d8 }).join('|')), 'F5 structure shows the first page links (href and text)');
+  var deep = mk('span', 'p', [], '\u20b91,27,900'); for (var iD = 0; iD < 10; iD++) deep = mk('div', 'w' + iD, [deep]);
+  var rootD = wire(mk('body', '', [mk('div', 'card', [mk('a', 'l', [], '', '/p/deep'), deep])]));
+  global.document = { querySelectorAll: function (s) { return s === 'a[href]' ? allOf(rootD).filter(function (c) { return c.tagName === 'A'; }) : allOf(rootD); } };
+  var dD = W.structureProbe(); delete global.document;
+  ok(dD.samples.length === 1 && dD.samples[0].href === '/p/deep' && dD.samples[0].chain.split(' < ').length === 12, 'F6 structure looks 14 levels up for the card link (was 8)');
+
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
     var pb = mockPlugin(), wb = W.createWebTabs(pb.api), seen = [];
@@ -193,11 +218,11 @@ function pageUndef() { return undefined; }
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.4.0' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
+  ok(pkg.version === '0.5.0' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 2 && appjs.indexOf('.runAll(') > appjs.indexOf('async function onSubmit') && /addEventListener\('submit', onSubmit\)/.test(appjs), 'D5 runAll only inside the Compare submit handler (D-010)');
-  ok(/customUserAgent/.test(appjs) && /readOffers\(out, q, tabs, tabs2\)/.test(appjs) && /structureProbe/.test(appjs) && /offerProbe/.test(appjs) && /chromeUa\(navigator\.userAgent\)/.test(appjs) && /retry && run\.state === 'off'/.test(appjs), 'D6b second try, structure and offers are wired');
+  ok(/customUserAgent/.test(appjs) && /readOffers\(out, q, tabs, tabs2, view\)/.test(appjs) && /structureProbe/.test(appjs) && /offerProbe/.test(appjs) && /desktopUa\(navigator\.userAgent\)/.test(appjs) && /retry && run\.state === 'off'/.test(appjs), 'D6b second try, structure and offers are wired');
   ok(/maxTabs: 1/.test(appjs) && /foreground: false/.test(appjs) && /enabledMap\(\)/.test(appjs), 'D6 one store at a time, hidden, Myntra off');
   var order = ['bundle.js', 'pagesnap.js', 'runner_core.js', 'view.js', 'app.js'].map(function (f) { return html.indexOf('src="' + f + '"'); });
   ok(order.every(function (x, i) { return x >= 0 && (i === 0 || x > order[i - 1]); }), 'D7 index.html loads the 5 scripts in order');

@@ -95,7 +95,7 @@ function render(view) {
 function storeOf(label) { return R.STORES.filter(function (s) { return s.label === label; })[0]; }
 
 // Test build (D-083): one product page per store that read listings, offer-like text lines only. Shown only on this screen, never stored or sent.
-async function readOffers(out, q, tabs, tabs2) {
+async function readOffers(out, q, tabs, tabs2, view) {
   var box = el('div'); box.id = 'poffers';
   box.appendChild(el('h3', null, 'Offers read from product pages (test build, shown only here)'));
   $('progress').appendChild(box);
@@ -103,9 +103,13 @@ async function readOffers(out, q, tabs, tabs2) {
   for (var i = 0; i < todo.length; i++) {
     var r = todo[i], st = storeOf(r.store), lines;
     say('Reading offers: ' + r.store + ' (' + (i + 1) + ' of ' + todo.length + ')...');
-    var pick = st ? W.pickProduct(r.snapshot.cards, q, st.url(q)) : null;
-    if (!pick) lines = [r.store + ': no usable listing link'];
-    else lines = W.offerLines(r.store, pick.url, await W.readPage(r.retried && tabs2 ? tabs2 : tabs, pick.url, W.offerProbe, { settleMs: 3000 }));
+    var pick = st ? W.pickFromView(view, r.store, st.url(q)) : null;
+    if (!pick) lines = [r.store + ': offers not read (no listing of this store matched the search, so no product page was opened)'];
+    else {
+      var tb = r.retried && tabs2 ? tabs2 : tabs, rd = await W.readPage(tb, pick.url, W.offerProbe, { settleMs: 3000 });
+      if (!rd.ok) rd = await W.readPage(tb, pick.url, W.offerProbe, { settleMs: 6000 }); // one more try for a slow page
+      lines = W.offerLines(r.store, pick.url, rd);
+    }
     lines.forEach(function (l) { box.appendChild(el('p', 'note', l)); });
   }
 }
@@ -125,9 +129,9 @@ async function onSubmit(ev) {
     var out = await R.runAll(tabs, opts(kill));
     var bad = W.failingLabels(out.runs);
     if (bad.length) {
-      say('Second try for ' + bad.join(', ') + ' with a Chrome identity...');
+      say('Second try for ' + bad.join(', ') + ' with a desktop identity...');
       retry = true;
-      tabs2 = W.createWebTabs(pluginApi(C.chromeUa(navigator.userAgent)), { probe: true }); wt = tabs2;
+      tabs2 = W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { probe: true }); wt = tabs2;
       W.mergeRuns(out, await R.runAll(tabs2, opts(W.enabledOnly(R.STORES, bad))));
       retry = false;
       var still = W.failingLabels(out.runs);
@@ -138,9 +142,10 @@ async function onSubmit(ev) {
     }
     var tl = V.timeLine(out); if (tl) { var pt = el('p', 'note', tl); pt.id = 'ptime'; $('progress').appendChild(pt); }
     var res = SmartSetu.compareAny({ query: q, searches: out.snapshots, products: [], seenAt: out.seenAt });
-    render(V.buildView(res, out.runs, out.seenAt));
+    var view = V.buildView(res, out.runs, out.seenAt);
+    render(view);
     showDiag();
-    await readOffers(out, q, tabs, tabs2);
+    await readOffers(out, q, tabs, tabs2, view);
     say('');
   } catch (e) {
     say('Something went wrong, nothing was compared. Please try again.');

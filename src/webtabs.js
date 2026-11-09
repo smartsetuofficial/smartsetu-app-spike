@@ -31,7 +31,7 @@ function diagLines(label, d) {
 function createWebTabs(plugin, o) {
   o = o || {};
   var execMs = o.execMs == null ? 45000 : o.execMs;
-  var listeners = [], pending = {}, loaded = {}, current = null, opening = false, earlyLoad = false, seq = 0, unsubs = [], inited = null, probe = o.probe === true, lastProbe = null;
+  var listeners = [], pending = {}, loaded = {}, current = null, opening = false, earlyLoad = false, seq = 0, unsubs = [], inited = null, probe = o.probe === true, lastProbe = null, opened = {};
 
   function onMsg(ev) {
     var d = detailOf(ev); if (!d || !d.cid) return;
@@ -61,7 +61,7 @@ function createWebTabs(plugin, o) {
       return init().then(function () {
         opening = true; earlyLoad = false; lastProbe = null;
         return Promise.resolve(plugin.open({ url: spec.url, visible: !!spec.active })).then(function (id) {
-          current = id; loaded[id] = earlyLoad; opening = false;
+          current = id; loaded[id] = earlyLoad; opening = false; if (id != null) opened[id] = 1;
           return { id: id, status: earlyLoad ? 'complete' : 'loading' };
         }, function (e) { opening = false; throw e; });
       });
@@ -70,7 +70,7 @@ function createWebTabs(plugin, o) {
     remove: function (id) {
       failPending(id, 'tab closed');
       if (current === id) current = null;
-      delete loaded[id];
+      delete loaded[id]; delete opened[id];
       return Promise.resolve(plugin.close({ id: id }));
     },
     onUpdated: {
@@ -115,6 +115,7 @@ function createWebTabs(plugin, o) {
 
   function dispose() {
     failPending(null, 'closed');
+    Object.keys(opened).forEach(function (k) { try { Promise.resolve(plugin.close({ id: k })).catch(function () {}); } catch (_) {} }); opened = {}; // S14-1d: no page is left open after a run
     unsubs.forEach(function (u) { try { if (typeof u === 'function') u(); } catch (_) {} });
     unsubs = []; inited = null; listeners = [];
   }
@@ -148,6 +149,23 @@ function pickProduct(cards, query, searchUrl) {
   });
   return best ? { url: best.url } : null;
 }
+// S14-1d: the offers are read only from a listing that really matched the search (a row of the result), never from the first card of the store page.
+function rowsOf(view) {
+  var rows = [];
+  if (view && view.top && view.top.rows) rows = rows.concat(view.top.rows);
+  ((view && view.groups) || []).forEach(function (g) { rows = rows.concat((g && g.rows) || []); });
+  return rows;
+}
+function pickFromView(view, label, searchUrl) {
+  var base; try { base = new URL(searchUrl); } catch (_) { return null; }
+  var rows = rowsOf(view);
+  for (var i = 0; i < rows.length; i++) {
+    var r = rows[i]; if (!r || !r.url || String(r.store).toLowerCase() !== String(label).toLowerCase()) continue;
+    var u; try { u = new URL(r.url, base); } catch (_) { continue; }
+    if (u.protocol === 'https:' && sameSite(u.hostname, base.hostname)) return { url: u.href };
+  }
+  return null;
+}
 // Open one page, wait, run one page function, always close. Never throws.
 async function readPage(wt, url, func, o) {
   o = o || {};
@@ -167,24 +185,36 @@ async function readPage(wt, url, func, o) {
 }
 // Page functions (self-contained, they run inside the store page). They only read text that is on the page.
 async function offerProbe() {
-  var re = /offer|coupon|bank|emi|cashback|discount|instant|no cost|% off|\bsave\b|\bsavings\b/i;
-  var rx = /^(view |see |all |more |show )?(bank )?(offers?|coupons?)( \(\d+\))?$|view all offers|view more offers|\+\s?\d+ (more )?offers?|^\d+ offers?$|more offers?/i;
+  // Offer-like lines only (S14-1d): bank/card/EMI/cashback/coupon words or a saving amount. Prose (reviews, descriptions) is dropped, nothing is stored or sent.
+  var rxBtn = /^(view |see |all |more |show )?(bank |all )?(offers?|coupons?)( (&|and) discounts?)?( \(\d+\))?$|view all offers|view more offers|see all offers|\+\s?\d+ (more )?offers?|^\d+ offers?$|more offers?/i;
+  var info = /\b(bank|credit cards?|debit cards?|cards?|upi|wallet|cashback|coupons?|emi|instant discount|no cost)\b/i;
+  var money = /(\u20b9|rs\.?\s?)\s?\d|\d\s?%/i;
+  var saveAmt = /\bsave\s+(up ?to\s+)?(\u20b9|rs\.?\s?)?\d/i;
+  var offerWord = /\b(off|discount|savings?|offers?|extra|flat|upto|up to)\b/i;
+  function keep(s) {
+    if (s.length < 6 || s.length > 140) return false;
+    if (s.split(' ').length > 16) return false;
+    if (/[.!?]\s+[A-Z]/.test(s)) return false;
+    return info.test(s) || saveAmt.test(s) || (money.test(s) && offerWord.test(s));
+  }
   function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
   var clicked = 0;
   try {
-    var btns = document.querySelectorAll('button, [role="button"]');
+    var btns = document.querySelectorAll('button, [role="button"], summary, a, [tabindex]');
     for (var i = 0; i < btns.length && clicked < 3; i++) {
       var tx = String(btns[i].innerText || btns[i].textContent || '').replace(/\s+/g, ' ').trim();
-      if (tx.length > 0 && tx.length < 40 && rx.test(tx)) { try { btns[i].click(); clicked++; await wait(900); } catch (e) {} }
+      if (!(tx.length > 0 && tx.length < 40 && rxBtn.test(tx))) continue;
+      if (String(btns[i].tagName || '').toUpperCase() === 'A') { var h = btns[i].getAttribute ? btns[i].getAttribute('href') : null; if (h && h !== '#' && !/^javascript/i.test(h)) continue; }
+      try { btns[i].click(); clicked++; await wait(900); } catch (e) {}
     }
   } catch (e) {}
   var t = String((document.body && (document.body.innerText || document.body.textContent)) || ''), seen = {}, out = [];
   t.split(/\n+/).forEach(function (s) {
     s = s.replace(/\s+/g, ' ').trim();
-    if (s.length < 6 || s.length > 160 || !re.test(s) || seen[s]) return;
+    if (seen[s] || !keep(s)) return;
     seen[s] = 1; out.push(s);
   });
-  return { title: String(document.title || '').slice(0, 100), url: String(location.href).slice(0, 200), clicked: clicked, total: out.length, lines: out.slice(0, 30) };
+  return { title: String(document.title || '').slice(0, 100), url: String(location.href).slice(0, 200), clicked: clicked, total: out.length, lines: out.slice(0, 40) };
 }
 function structureProbe() {
   function cls(e) { return String(e.tagName || '').toLowerCase() + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/)[0].slice(0, 40) : ''); }
@@ -195,7 +225,7 @@ function structureProbe() {
   }
   var samples = leaves.map(function (leaf) {
     var chain = [cls(leaf)], a = leaf.parentElement, link = null;
-    for (var k = 0; k < 8 && a; k++) {
+    for (var k = 0; k < 14 && a; k++) {
       chain.push(cls(a));
       link = a.querySelector ? a.querySelector('a[href]') : null;
       if (link && String(a.textContent || '').length < 400) break;
@@ -203,7 +233,9 @@ function structureProbe() {
     }
     return { price: String(leaf.textContent || '').trim().slice(0, 20), chain: chain.join(' < '), href: link ? String(link.getAttribute('href') || '').slice(0, 90) : '', text: a ? String(a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100) : '' };
   });
-  return { anchors: document.querySelectorAll('a[href]').length, priceLeaves: n, samples: samples };
+  var ls = [], as = document.querySelectorAll('a[href]');
+  for (var j = 0; j < as.length && ls.length < 4; j++) { var h = String(as[j].getAttribute('href') || ''); if (h.length > 1 && h.charAt(0) !== '#') ls.push(h.slice(0, 80) + ' "' + String(as[j].textContent || '').replace(/\s+/g, ' ').trim().slice(0, 30) + '"'); }
+  return { anchors: as.length, priceLeaves: n, samples: samples, linkSamples: ls };
 }
 function shortUrl(u) { try { var x = new URL(u); return (x.hostname + x.pathname).slice(0, 120); } catch (_) { return String(u).slice(0, 120); } }
 function offerLines(label, url, res) {
@@ -216,10 +248,11 @@ function structLines(label, res) {
   if (!res || !res.ok) return [label + ' structure: could not read (' + String((res && res.error) || 'no answer').slice(0, 80) + ')'];
   var d = res.result || {};
   return [label + ' structure', 'Links: ' + (Number(d.anchors) || 0) + ', price elements: ' + (Number(d.priceLeaves) || 0)]
-    .concat((d.samples || []).map(function (s, i) { return 'Sample ' + (i + 1) + ': ' + s.price + ' | ' + s.chain + ' | ' + s.href + ' | ' + s.text; }));
+    .concat((d.samples || []).map(function (s, i) { return 'Sample ' + (i + 1) + ': ' + s.price + ' | ' + s.chain + ' | ' + s.href + ' | ' + s.text; }))
+    .concat((d.linkSamples || []).map(function (l, i) { return 'Link ' + (i + 1) + ': ' + l; }));
 }
 
 var api = { createWebTabs: createWebTabs, detailOf: detailOf, enabledMap: enabledMap, lineText: lineText, diagLines: diagLines, OFF_TEXT: OFF_TEXT,
-  sameSite: sameSite, failingLabels: failingLabels, enabledOnly: enabledOnly, mergeRuns: mergeRuns, pickProduct: pickProduct, readPage: readPage,
+  sameSite: sameSite, failingLabels: failingLabels, enabledOnly: enabledOnly, mergeRuns: mergeRuns, pickProduct: pickProduct, pickFromView: pickFromView, rowsOf: rowsOf, readPage: readPage,
   offerProbe: offerProbe, structureProbe: structureProbe, offerLines: offerLines, structLines: structLines };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
