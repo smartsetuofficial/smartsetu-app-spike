@@ -212,6 +212,53 @@ function pageUndef() { return undefined; }
   ok(/test build 0\.6\.0/.test(rpt) && /ERROR during the run: boom/.test(rpt) && /- Amazon \| ok \| 24 \| 11 \| 1st/.test(rpt) && /- Flipkart \| no_cards \| 0 \| 61 \| 2nd try \(desktop identity\)/.test(rpt) && /- Reliance Digital \| \u20b91,29,900 \| Apple iPhone 17 Pro 256 GB, Silver/.test(rpt) && /PAGE STRUCTURE\n- \(none\)/.test(rpt) && /OFFERS FROM PRODUCT PAGES\nAmazon product page/.test(rpt), 'G8 buildReport: stores with state, count, seconds and pass; rows; sections; empty section says none; error line');
   ok(W.buildReport().split('\n').length > 5 && /RESULT ROWS[^]*- \(none\)/.test(W.buildReport()), 'G9 buildReport with no data does not throw');
 
+  // H: S14-1f (one final data round: every listing read is shown, long wait + scroll for a timed-out store, tile lines flagged)
+  var stCroma = R.STORES.filter(function (s) { return s.label === 'Croma'; })[0];
+  function pageCards(q) { return { v: 1, kind: 'search', query: q, url: location.href, cards: [{ link: 'https://www.croma.com/p/1', html: '<div>Apple iPhone 17 Pro</div>' }] }; }
+  function pageEmpty(q) { return { v: 1, query: q, url: location.href, cards: [] }; }
+  var runsH = [{ store: 'Amazon', state: 'ok', snapshot: fxSnap || { url: 'https://www.amazon.in/s?k=x', cards: [] } }, { store: 'Croma', state: 'timeout' }, { store: 'Ajio', state: 'ok', snapshot: { url: 'https://unknown.example/s', cards: [{ link: 'x', html: 'y' }] } }];
+  var pAm = global.SmartSetu.parseSearch(runsH[0].snapshot), lh = W.listingLines(runsH, [], global.SmartSetu.parseSearch);
+  ok(/^Store Amazon: \d+ cards read, \d+ parsed, skipped: /.test(lh[0]) && lh.filter(function (l) { return /^Store /.test(l); }).length === 2 && /^Store Ajio: 1 cards read, 0 parsed, skipped: none/.test(lh.filter(function (l) { return /^Store Ajio/.test(l); })[0]) && !lh.some(function (l) { return /^Store Croma/.test(l); }), 'H1 listingLines: a header for each store that has a snapshot, none for a store without one');
+  if (pAm.cards.length > 1) {
+    var lh2 = W.listingLines(runsH, [{ url: pAm.cards[0].url + '?ref=x' }], global.SmartSetu.parseSearch);
+    ok(/^- in result \| (\u20b9[\d,]+|no price) \| (card|slug|aria-label) \| .+/.test(lh2[1]) && lh2.filter(function (l) { return /^- in result/.test(l); }).length === 1 && /^- not in result \| /.test(lh2[2]), 'H2 listingLines: each parsed listing has result flag, price, title source, title; the matched row is found even with a query string');
+  } else console.log('SKIP H2: fixture has fewer than 2 parsed Amazon cards');
+  var stub = function () { return { cards: [{ url: 'https://www.amazon.in/dp/B1', priceNow: 129900, titleSource: 'slug', title: 'T' }], skipped: { sponsored_or_ad: 7 } }; };
+  var adCards = []; for (var iA = 0; iA < 8; iA++) adCards.push({ sponsored: true, html: '<div>Sponsored <b>Apple</b> iPhone 17 Pro ' + iA + '</div>' });
+  var lh3 = W.listingLines([{ store: 'Amazon', snapshot: { cards: adCards } }], [{ url: 'https://www.amazon.in/dp/B1?x=1' }], stub);
+  ok(lh3[0] === 'Store Amazon: 8 cards read, 1 parsed, skipped: sponsored_or_ad 7' && lh3[1] === '- in result | \u20b9129,900 | slug | T' && lh3.filter(function (l) { return /^- skipped ad \| /.test(l); }).length === 5 && lh3[2] === '- skipped ad | Sponsored Apple iPhone 17 Pro 0', 'H3 listingLines: skipped reasons, price format, at most 5 skipped ads with plain text');
+  var many = []; for (var iM = 0; iM < 40; iM++) many.push({ url: 'https://www.amazon.in/dp/B' + iM, priceNow: 100 + iM, titleSource: 'card', title: 'Item ' + iM });
+  var lhM = W.listingLines([{ store: 'Amazon', snapshot: { cards: [] } }], [], function () { return { cards: many, skipped: {} }; });
+  ok(lhM.length === 31 && lhM[0] === 'Store Amazon: 0 cards read, 40 parsed, skipped: none' && /Item 29$/.test(lhM[30]), 'H3b listingLines: at most 30 listings per store, the header still gives the real count');
+  ok(W.listingLines([{ store: 'X', snapshot: { cards: [] } }], [], function () { throw new Error('bad'); }).join('|') === 'Store X: could not parse (bad)' && W.listingLines(null, null, stub).length === 0, 'H4 listingLines: a parser error becomes one line, no runs gives nothing');
+  var rH = W.buildReport({ version: '0.7.0', query: 'q', runs: [{ store: 'Croma', state: 'timeout', ms: 110000, stage: 'reading', stageMs: 41000, loaded: true, slow: true, retried: true }, { store: 'Nykaa', state: 'error', ms: 3000, error: 'no answer\nfrom page', loaded: false }, { store: 'Amazon', state: 'ok', cards: 3, ms: 9000, rereads: 1 }], rows: [], listings: ['Store Amazon: 3 cards read, 3 parsed, skipped: none', '- in result | x'] });
+  ok(/- Croma \| timeout \| - \| 110 \| 3rd try \(long wait \+ scroll, desktop identity\) \| stopped at: reading \(41 s in that step\) \| page loaded: yes/.test(rH) && /- Nykaa \| error \| - \| 3 \| 1st \| page loaded: no \| error: no answer from page/.test(rH) && /- Amazon \| ok \| 3 \| 9 \| 1st \| rereads: 1/.test(rH) && /ALL LISTINGS READ[^\n]*\nStore Amazon: 3 cards read[^]*\n- in result \| x\n\nDIAGNOSTIC/.test(rH) && /ALL LISTINGS READ[^\n]*\n- \(none\)/.test(W.buildReport({ runs: [] })), 'H5 buildReport: stage and error of a failed store, 3rd try label, ALL LISTINGS section before DIAGNOSTIC');
+  var oneTile = ['5% OFF', '\u20b985,999 with Bank offer', 'Rs. 52,249 with Bank offer', '\u20b939,999 with No Cost EMI offer', '18%  off'];
+  var noTile = ['Save upto \u20b917,500', '10% up to Rs.15000 Instant Discount with IndusInd Bank Credit Card EMI', 'Flat Rs. 7000 Instant Discount with Kotak Bank Credit Card EMI', 'MRP \u20b91,34,900.00 (Inclusive of all taxes)4% OFF', '\u20b97,000 off', 'Bank offers', 'Extra 35% off on First Order'];
+  ok(oneTile.every(function (l) { return W.isTileLine(l); }) && noTile.every(function (l) { return !W.isTileLine(l); }) && W.isTileLine(null) === false, 'H6 isTileLine: price-with-offer and bare percent lines only');
+  var oH = W.offerLines('Flipkart', 'https://www.flipkart.com/p/1', { ok: true, result: { title: 'T', url: 'https://www.flipkart.com/p/1', total: 8, clicked: 1, lines: ['Bank offers', '\u20b97,000 off', '5% OFF', '\u20b917,499 with No Cost EMI offer', '18% OFF', '\u20b985,999 with Bank offer', 'Flat Rs. 7000 Instant Discount with Kotak Bank Credit Card EMI', 'MRP \u20b91,34,900.00 (Inclusive of all taxes)4% OFF'] } }).join('\n');
+  ok(/Offer-like lines: 8 \(expanded 1\)\n- Bank offers\n- \u20b97,000 off\n- Flat Rs\. 7000 Instant Discount with Kotak Bank Credit Card EMI\n- MRP [^\n]*4% OFF\nTile-like lines \(probably other products, not offers of this product\): 4\n\? 5% OFF\n\? \u20b917,499 with No Cost EMI offer\n\? 18% OFF\n\? \u20b985,999 with Bank offer$/.test(oH) && !/\n- 5% OFF/.test(oH), 'H7 offerLines (all stores): tile-like lines are listed apart, real offers stay, nothing is hidden');
+  ok(W.offerLines('Reliance Digital', 'https://x/', { ok: true, result: { total: 1, clicked: 0, lines: ['10% Instant Discount with Punjab National Bank Credit Card'] } }).join('|').indexOf('Tile-like') < 0, 'H7b a page with no tile lines has no Tile section');
+  var pH = mockPlugin(), wH = W.createWebTabs(pH.api);
+  var sH = await W.slowRead(wH, stCroma, 'iphone 17 pro', pageCards, { settleMs: 5, loadMs: 2000, totalMs: 4000 });
+  ok(sH.state === 'ok' && sH.slow === true && sH.retried === true && sH.cards === 1 && sH.snapshot.cards.length === 1 && /croma/.test(sH.snapshot.url) && sH.store === 'Croma' && sH.key === stCroma.key && pH.execs === 2 && pH.opened.length === 1 && pH.opened[0].visible === false && pH.closed.length === 1 && pH.open === 0, 'H8 slowRead: one hidden page, scroll then collect, run shape as runner_core, page closed');
+  var sH2 = await W.slowRead(W.createWebTabs(mockPlugin().api), stCroma, 'x', pageEmpty, { settleMs: 5, loadMs: 2000, totalMs: 4000 }), sH3 = await W.slowRead(W.createWebTabs(mockPlugin().api), stCroma, 'x', pageUndef, { settleMs: 5, loadMs: 2000, totalMs: 4000 });
+  ok(sH2.state === 'no_cards' && sH2.snapshot && sH3.state === 'no_data' && !sH3.snapshot, 'H9 slowRead: empty list is no_cards, no answer object is no_data');
+  var pT = mockPlugin({ dropExec: true }), wT = W.createWebTabs(pT.api, { execMs: 5000 });
+  var sT = await W.slowRead(wT, stCroma, 'x', pageCards, { settleMs: 5, loadMs: 2000, totalMs: 700 }); await sleep(40);
+  ok(sT.state === 'timeout' && sT.stage === 'scrolling' && sT.slow === true && sT.stageMs >= 0 && sT.loaded === true && pT.open === 0 && pT.closed.length === 1 && pT.execs === 1, 'H10 slowRead: over time it reports where it stopped, closes the page, starts no more page scripts');
+  var pE2 = mockPlugin({ noBridge: true }), wE2 = W.createWebTabs(pE2.api, { execMs: 30 });
+  var sE2 = await W.slowRead(wE2, stCroma, 'x', pageCards, { settleMs: 5, loadMs: 2000, totalMs: 3000 });
+  ok(sE2.state === 'error' && /no answer/.test(sE2.error) && sE2.stage === 'reading' && pE2.open === 0, 'H11 slowRead: a silent page is an error with the step, page closed, no throw');
+  var pL = mockPlugin(), wL = W.createWebTabs(pL.api), sL = await W.slowRead(wL, { label: 'Zed', key: 'zed', url: function () { return 'https://www.zed.test/s'; } }, 'x', pageCards, { settleMs: 5, loadMs: 20, totalMs: 4000 });
+  ok(sL.state === 'ok' && sL.store === 'Zed', 'H12 slowRead works for any store config (not tied to Croma)');
+  var runsM = [{ store: 'Croma', state: 'timeout' }, { store: 'Amazon', state: 'ok', snapshot: { cards: [1] } }, { store: 'Myntra', state: 'off' }, { store: 'Nykaa', state: 'no_cards' }], outM = { runs: runsM.slice(), snapshots: [] };
+  ok(JSON.stringify(W.timedOutLabels(runsM)) === '["Croma"]' && JSON.stringify(W.timedOutLabels(null)) === '[]', 'H13 timedOutLabels: only timeout');
+  W.mergeRuns(outM, { runs: [sH] });
+  ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
+  var appH = read('src/app.js');
+  ok(/VERSION = '0\.7\.0'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /listings: W\.listingLines\(out \? out\.runs : \[\], view \? W\.rowsOf\(view\) : \[\], SmartSetu\.parseSearch\)/.test(appH) && /run\.slow \? '3rd try \(long wait\): '/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'H15 app wiring: slow third try, listings in report, 3rd-try label, still only 2 runAll calls');
+
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
     var pb = mockPlugin(), wb = W.createWebTabs(pb.api), seen = [];
@@ -244,7 +291,7 @@ function pageUndef() { return undefined; }
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.6.0' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
+  ok(pkg.version === '0.7.0' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 2 && appjs.indexOf('.runAll(') > appjs.indexOf('async function onSubmit') && /addEventListener\('submit', onSubmit\)/.test(appjs), 'D5 runAll only inside the Compare submit handler (D-010)');

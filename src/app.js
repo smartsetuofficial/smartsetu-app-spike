@@ -4,7 +4,7 @@ import { InAppBrowser, InvisibilityMode } from '@capgo/capacitor-inappbrowser';
 var W = require('./webtabs.js');
 var C = require('./spike_core.js');
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, wt = null, diag = {}, struct = {}, retry = false, VERSION = '0.6.0', rep = { diag: [], struct: [], offers: [] };
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, wt = null, diag = {}, struct = {}, retry = false, VERSION = '0.7.0', rep = { diag: [], struct: [], offers: [] };
 function $(id) { return document.getElementById(id); }
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -38,7 +38,7 @@ function updateProgress(run) {
   if (retry && run.state === 'off') return; // second pass: stores that are not retried keep their first-pass line
   var st = plistItems[run.store]; if (!st) return;
   var line = V.buildView({ query: {} }, [run]).stores[0];
-  st.textContent = (retry && run.state !== 'off' ? '2nd try: ' : '') + W.lineText(run, line.text);
+  st.textContent = (run.slow ? '3rd try (long wait): ' : retry && run.state !== 'off' ? '2nd try: ' : '') + W.lineText(run, line.text);
   st.className = 'st ' + (run.state === 'ok' ? 'ok' : (run.state === 'off' || run.state === 'retrying' ? '' : 'bad'));
   if (run.state === 'ok') delete diag[run.store];
   if (wt && (run.state === 'no_cards' || run.state === 'no_data' || run.state === 'error')) { var pr = wt.lastProbe(); diag[run.store] = pr ? pr.d : null; }
@@ -117,7 +117,7 @@ async function readOffers(out, q, tabs, tabs2, view) {
 // S14-1e (test build): one text report of the whole run, copied only when the owner taps the button. Nothing is sent by the app.
 function showReport(q, out, view, err, t0) {
   var box = $('report'); if (!box) return;
-  var text = W.buildReport({ version: VERSION, query: q, seenAt: out && out.seenAt ? new Date(out.seenAt).toLocaleString() : '', totalS: Math.round((Date.now() - t0) / 1000), ua: (/Chrome\/[\d.]+/.exec(navigator.userAgent) || ['?'])[0], runs: out ? out.runs : [], rows: view ? W.rowsOf(view) : [], diag: rep.diag, struct: rep.struct, offers: rep.offers, error: err });
+  var text = W.buildReport({ version: VERSION, query: q, seenAt: out && out.seenAt ? new Date(out.seenAt).toLocaleString() : '', totalS: Math.round((Date.now() - t0) / 1000), ua: (/Chrome\/[\d.]+/.exec(navigator.userAgent) || ['?'])[0], runs: out ? out.runs : [], rows: view ? W.rowsOf(view) : [], listings: W.listingLines(out ? out.runs : [], view ? W.rowsOf(view) : [], SmartSetu.parseSearch), diag: rep.diag, struct: rep.struct, offers: rep.offers, error: err });
   $('reptext').value = text; $('repmsg').textContent = 'Tap Copy, then paste the whole report in the chat. Nothing is sent by the app.'; box.hidden = false;
 }
 function copyReport() {
@@ -153,6 +153,21 @@ async function onSubmit(ev) {
       for (var k = 0; k < still.length; k++) {
         say('Reading page structure: ' + still[k] + '...');
         struct[still[k]] = await W.readPage(tabs2, storeOf(still[k]).url(q), W.structureProbe, { settleMs: 4000 });
+      }
+    }
+    var slowL = W.timedOutLabels(out.runs); // S14-1f: a store that timed out gets one more try with a long wait and scrolling (every store, D-073)
+    if (slowL.length) {
+      tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { probe: true }); wt = tabs2;
+      for (var sl = 0; sl < slowL.length; sl++) {
+        say('Third try for ' + slowL[sl] + ': long wait and scrolling...');
+        var sr = await W.slowRead(tabs2, storeOf(slowL[sl]), q, smartsetuCollect, {});
+        W.mergeRuns(out, { runs: [sr] }); updateProgress(sr);
+      }
+      var still2 = W.failingLabels(out.runs);
+      for (var k2 = 0; k2 < still2.length; k2++) {
+        if (struct[still2[k2]]) continue;
+        say('Reading page structure: ' + still2[k2] + '...');
+        struct[still2[k2]] = await W.readPage(tabs2, storeOf(still2[k2]).url(q), W.structureProbe, { settleMs: 4000 });
       }
     }
     var tl = V.timeLine(out); if (tl) { var pt = el('p', 'note', tl); pt.id = 'ptime'; $('progress').appendChild(pt); }

@@ -288,11 +288,17 @@ async function structureProbe() {
   return { anchors: as.length, priceLeaves: g0.n, samples: g0.samples, linkSamples: ls, textLen: txt.length, emptyHref: emptyHref, clickable: clickable, shadow: shadow, frames: frames, markers: marks, hints: hints, skeleton: sk, scroll: sc, after: after };
 }
 function shortUrl(u) { try { var x = new URL(u); return (x.hostname + x.pathname).slice(0, 120); } catch (_) { return String(u).slice(0, 120); } }
+// S14-1f (D-073, every store): a line that is only "<price> with Bank offer" or "<n>% OFF" is the tile of ANOTHER product on the page (seen on Flipkart 9 Nov 2026), not an offer of this product. It is flagged, not hidden.
+var TILE_PRICE = /^(?:\u20b9|Rs\.?)\s?[\d,]+(?:\.\d+)?\s+with\s+(?:no cost emi|bank|emi|exchange|coupon)\s+offers?$/i, TILE_PCT = /^\d{1,2}%\s*off$/i;
+function isTileLine(s) { s = String(s == null ? '' : s).replace(/\s+/g, ' ').trim(); return TILE_PRICE.test(s) || TILE_PCT.test(s); }
 function offerLines(label, url, res) {
   if (!res || !res.ok) return [label + ': could not read the product page (' + String((res && res.error) || 'no answer').slice(0, 80) + ')'];
-  var d = res.result || {};
-  return [label + ' product page', 'Page: ' + shortUrl(d.url || url), 'Title: ' + (d.title || '(none)'), 'Offer-like lines: ' + (Number(d.total) || 0) + ' (expanded ' + (Number(d.clicked) || 0) + ')']
-    .concat((d.lines || []).map(function (l) { return '- ' + l; }));
+  var d = res.result || {}, main = [], tiles = [];
+  (d.lines || []).forEach(function (l) { (isTileLine(l) ? tiles : main).push(l); });
+  var out = [label + ' product page', 'Page: ' + shortUrl(d.url || url), 'Title: ' + (d.title || '(none)'), 'Offer-like lines: ' + (Number(d.total) || 0) + ' (expanded ' + (Number(d.clicked) || 0) + ')']
+    .concat(main.map(function (l) { return '- ' + l; }));
+  if (tiles.length) out = out.concat(['Tile-like lines (probably other products, not offers of this product): ' + tiles.length]).concat(tiles.map(function (l) { return '? ' + l; }));
+  return out;
 }
 function sampleLine(s, i, tag) { return tag + ' ' + (i + 1) + ': ' + s.price + ' | ' + s.chain + ' | ' + s.href + ' | ' + s.text; }
 function structLines(label, res) {
@@ -315,15 +321,90 @@ function buildReport(p) {
   var L = ['SmartSetu app report (test build ' + (p.version || '?') + ')', 'Query: ' + (p.query || '') + ' | Seen at: ' + (p.seenAt || '') + ' | Total: ' + (p.totalS == null ? '?' : p.totalS) + ' s', 'Browser: ' + (p.ua || '?')];
   if (p.error) L.push('ERROR during the run: ' + String(p.error).slice(0, 200));
   L.push('', 'STORES (state | listings | seconds | pass)');
-  (p.runs || []).forEach(function (r) { L.push('- ' + r.store + ' | ' + r.state + ' | ' + (r.cards == null ? '-' : r.cards) + ' | ' + (r.ms >= 1000 ? Math.round(r.ms / 1000) : (r.ms || 0)) + ' | ' + (r.retried ? '2nd try (desktop identity)' : '1st')); });
+  (p.runs || []).forEach(function (r) {
+    var more = '';
+    if (r.stage) more += ' | stopped at: ' + r.stage + (r.stageMs != null ? ' (' + Math.round(r.stageMs / 1000) + ' s in that step)' : '');
+    if (r.loaded != null) more += ' | page loaded: ' + (r.loaded ? 'yes' : 'no');
+    if (r.error) more += ' | error: ' + String(r.error).replace(/\s+/g, ' ').slice(0, 120);
+    if (r.rereads) more += ' | rereads: ' + r.rereads;
+    L.push('- ' + r.store + ' | ' + r.state + ' | ' + (r.cards == null ? '-' : r.cards) + ' | ' + (r.ms >= 1000 ? Math.round(r.ms / 1000) : (r.ms || 0)) + ' | ' + (r.slow ? '3rd try (long wait + scroll, desktop identity)' : r.retried ? '2nd try (desktop identity)' : '1st') + more);
+  });
   L.push('', 'RESULT ROWS (store | price | title)');
   (p.rows || []).forEach(function (r) { L.push('- ' + r.store + ' | ' + (r.price || '-') + ' | ' + String(r.title || '').slice(0, 70)); });
   if (!(p.rows || []).length) L.push('- (none)');
-  [['DIAGNOSTIC', p.diag], ['PAGE STRUCTURE', p.struct], ['OFFERS FROM PRODUCT PAGES', p.offers]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
+  [['ALL LISTINGS READ (per store: in result or not | price | where the title came from | title)', p.listings], ['DIAGNOSTIC', p.diag], ['PAGE STRUCTURE', p.struct], ['OFFERS FROM PRODUCT PAGES', p.offers]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
   return L.join('\n');
+}
+
+// ---- S14-1f (final data build): every listing the phone read, long wait + scroll for a store that timed out, one report.
+function timedOutLabels(runs) { return (runs || []).filter(function (r) { return r.state === 'timeout'; }).map(function (r) { return r.store; }); }
+function normUrl(u) { try { var x = new URL(u); return x.hostname.replace(/^www\./, '') + x.pathname; } catch (_) { return String(u || '').split('?')[0]; } }
+function plainText(html) { return String(html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim(); }
+function money(n) { return '\u20b9' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+// Pure. One block per store that gave a snapshot: header (cards read, parsed, skipped by reason), every parsed listing (in result or not | price | title source | title, max 30), up to 5 skipped ads with their text. parse = SmartSetu.parseSearch (the same parser for every store).
+function listingLines(runs, rows, parse) {
+  var inRes = {}, out = [];
+  (rows || []).forEach(function (r) { if (r && r.url) inRes[normUrl(r.url)] = 1; });
+  (runs || []).forEach(function (r) {
+    if (!r || !r.snapshot) return;
+    var cards = r.snapshot.cards || [], p = null;
+    try { p = parse(r.snapshot) || {}; } catch (e) { out.push('Store ' + r.store + ': could not parse (' + String((e && e.message) || e).slice(0, 80) + ')'); return; }
+    var sk = Object.keys(p.skipped || {}).map(function (k) { return k + ' ' + p.skipped[k]; }).join(', ');
+    out.push('Store ' + r.store + ': ' + cards.length + ' cards read, ' + (p.cards || []).length + ' parsed, skipped: ' + (sk || 'none'));
+    (p.cards || []).slice(0, 30).forEach(function (c) {
+      out.push('- ' + (inRes[normUrl(c.url)] ? 'in result' : 'not in result') + ' | ' + (c.priceNow == null ? 'no price' : money(c.priceNow)) + ' | ' + (c.titleSource || '?') + ' | ' + String(c.title || '(no title)').slice(0, 90));
+    });
+    var n = 0;
+    cards.forEach(function (c) { if (n >= 5 || !c || !(c.sponsored || c.ad)) return; n++; out.push('- skipped ad | ' + plainText(c.html).slice(0, 90)); });
+  });
+  return out;
+}
+// Page function: scroll to the bottom 4 times so a lazy page draws its cards. Reads nothing, sends nothing.
+async function scrollPage() {
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  var steps = [];
+  try {
+    for (var i = 0; i < 4; i++) {
+      window.scrollTo(0, (document.body && document.body.scrollHeight) || 100000);
+      await wait(1500);
+      steps.push({ h: Number(document.body && document.body.scrollHeight) || 0, a: document.querySelectorAll('a[href]').length });
+    }
+    window.scrollTo(0, 0);
+  } catch (e) {}
+  return steps;
+}
+// Third try for a store that timed out (any store, D-073): one page, long wait, scroll, then the same collect function as the first read. Never throws. Returns a run (runner_core shape) with slow: true.
+async function slowRead(wt, store, query, collect, o) {
+  o = o || {};
+  var totalMs = o.totalMs == null ? 110000 : o.totalMs, loadMs = o.loadMs == null ? 40000 : o.loadMs, settleMs = o.settleMs == null ? 4000 : o.settleMs;
+  var t0 = Date.now(), id = null, stage = 'opening', stageAt = Date.now(), loadedFlag = null, timer = null, over = false;
+  function at(s) { stage = s; stageAt = Date.now(); }
+  function base(state, extra) { return Object.assign({ store: store.label, key: store.key, state: state, ms: Date.now() - t0, slow: true, retried: true }, extra || {}); }
+  var guard = new Promise(function (res) { timer = setTimeout(function () { over = true; res(base('timeout', { stage: stage, stageMs: Date.now() - stageAt, loaded: loadedFlag })); }, totalMs); });
+  var work = (async function () {
+    try {
+      var t = await wt.tabs.create({ url: store.url(query), active: false }); id = t.id; at('loading');
+      var tl = Date.now();
+      while (Date.now() - tl < loadMs && !over) { var g = await wt.tabs.get(id); if (g.status === 'complete') { loadedFlag = true; break; } await sleep(250); }
+      if (loadedFlag !== true) loadedFlag = false;
+      at('settling'); await sleep(settleMs); if (over) return null;
+      at('scrolling'); var sc = null;
+      try { var r1 = await wt.scripting.executeScript({ target: { tabId: id }, func: scrollPage, args: [] }); sc = r1 && r1[0] ? r1[0].result : null; } catch (e) { sc = null; }
+      if (over) return null;
+      at('reading');
+      var r2 = await wt.scripting.executeScript({ target: { tabId: id }, func: collect, args: [query] }), snap = r2 && r2[0] && r2[0].result;
+      if (!snap || !Array.isArray(snap.cards)) return base('no_data', { scroll: sc });
+      return base(snap.cards.length ? 'ok' : 'no_cards', { cards: snap.cards.length, snapshot: snap, scroll: sc });
+    } catch (e) { return base('error', { error: String((e && e.message) || e), stage: stage }); }
+  })();
+  var res = await Promise.race([work, guard]);
+  clearTimeout(timer); over = true;
+  if (id != null) { try { await wt.tabs.remove(id); } catch (_) {} }
+  return res;
 }
 
 var api = { createWebTabs: createWebTabs, detailOf: detailOf, enabledMap: enabledMap, lineText: lineText, diagLines: diagLines, OFF_TEXT: OFF_TEXT,
   sameSite: sameSite, failingLabels: failingLabels, enabledOnly: enabledOnly, mergeRuns: mergeRuns, pickProduct: pickProduct, pickFromView: pickFromView, rowsOf: rowsOf, readPage: readPage,
-  offerProbe: offerProbe, structureProbe: structureProbe, offerLines: offerLines, structLines: structLines, buildReport: buildReport };
+  offerProbe: offerProbe, structureProbe: structureProbe, offerLines: offerLines, structLines: structLines, buildReport: buildReport,
+  timedOutLabels: timedOutLabels, listingLines: listingLines, scrollPage: scrollPage, slowRead: slowRead, isTileLine: isTileLine };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
