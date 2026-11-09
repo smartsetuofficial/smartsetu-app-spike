@@ -4,7 +4,7 @@ import { InAppBrowser, InvisibilityMode } from '@capgo/capacitor-inappbrowser';
 var W = require('./webtabs.js');
 var C = require('./spike_core.js');
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, wt = null, diag = {}, struct = {}, retry = false;
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, wt = null, diag = {}, struct = {}, retry = false, VERSION = '0.6.0', rep = { diag: [], struct: [], offers: [] };
 function $(id) { return document.getElementById(id); }
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -27,7 +27,7 @@ function say(t) { $('msg').textContent = t || ''; }
 function setBusy(b) { busy = b; $('go').disabled = b; $('go').textContent = b ? 'Comparing...' : 'Compare'; }
 
 function initProgress(kill) {
-  var ul = $('plist'); ul.textContent = ''; plistItems = {}; var oldT = $('ptime'); if (oldT) oldT.remove(); var oldD = $('pdiag'); if (oldD) oldD.remove(); var oldO = $('poffers'); if (oldO) oldO.remove();
+  var ul = $('plist'); ul.textContent = ''; plistItems = {}; var oldT = $('ptime'); if (oldT) oldT.remove(); var oldD = $('pdiag'); if (oldD) oldD.remove(); var oldO = $('poffers'); if (oldO) oldO.remove(); $('report').hidden = true;
   R.STORES.forEach(function (s) {
     var li = el('li'), st = el('span', 'st', kill[s.label] === false ? (W.OFF_TEXT[s.key] || 'Switched off') : 'Waiting...');
     li.appendChild(el('span', null, s.label)); li.appendChild(st); ul.appendChild(li); plistItems[s.label] = st;
@@ -49,8 +49,8 @@ function showDiag() {
   var names = Object.keys(diag); if (!names.length && !Object.keys(struct).length) return;
   var box = el('div'); box.id = 'pdiag';
   box.appendChild(el('h3', null, 'Diagnostic (test build, shown only here)'));
-  names.forEach(function (n) { W.diagLines(n, diag[n]).forEach(function (l) { box.appendChild(el('p', 'note', l)); }); });
-  Object.keys(struct).forEach(function (n) { W.structLines(n, struct[n]).forEach(function (l) { box.appendChild(el('p', 'note', l)); }); });
+  names.forEach(function (n) { W.diagLines(n, diag[n]).forEach(function (l) { rep.diag.push(l); box.appendChild(el('p', 'note', l)); }); });
+  Object.keys(struct).forEach(function (n) { W.structLines(n, struct[n]).forEach(function (l) { rep.struct.push(l); box.appendChild(el('p', 'note', l)); }); });
   $('progress').appendChild(box);
 }
 
@@ -110,8 +110,22 @@ async function readOffers(out, q, tabs, tabs2, view) {
       if (!rd.ok) rd = await W.readPage(tb, pick.url, W.offerProbe, { settleMs: 6000 }); // one more try for a slow page
       lines = W.offerLines(r.store, pick.url, rd);
     }
-    lines.forEach(function (l) { box.appendChild(el('p', 'note', l)); });
+    lines.forEach(function (l) { rep.offers.push(l); box.appendChild(el('p', 'note', l)); });
   }
+}
+
+// S14-1e (test build): one text report of the whole run, copied only when the owner taps the button. Nothing is sent by the app.
+function showReport(q, out, view, err, t0) {
+  var box = $('report'); if (!box) return;
+  var text = W.buildReport({ version: VERSION, query: q, seenAt: out && out.seenAt ? new Date(out.seenAt).toLocaleString() : '', totalS: Math.round((Date.now() - t0) / 1000), ua: (/Chrome\/[\d.]+/.exec(navigator.userAgent) || ['?'])[0], runs: out ? out.runs : [], rows: view ? W.rowsOf(view) : [], diag: rep.diag, struct: rep.struct, offers: rep.offers, error: err });
+  $('reptext').value = text; $('repmsg').textContent = 'Tap Copy, then paste the whole report in the chat. Nothing is sent by the app.'; box.hidden = false;
+}
+function copyReport() {
+  var ta = $('reptext'), msg = $('repmsg'), t = ta.value, hint = 'Could not copy by itself. Press and hold inside the box, choose Select all, then Copy.';
+  function fallback() {
+    try { ta.focus(); ta.select(); ta.setSelectionRange(0, t.length); msg.textContent = document.execCommand && document.execCommand('copy') ? 'Copied. Paste it in the chat.' : hint; } catch (_) { msg.textContent = hint; }
+  }
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(t).then(function () { msg.textContent = 'Copied. Paste it in the chat.'; }, fallback); else fallback();
 }
 
 async function onSubmit(ev) {
@@ -120,13 +134,14 @@ async function onSubmit(ev) {
   var q = $('q').value.trim();
   if (!q) { say('Type what you want to buy, for example "boAt Airdopes 141".'); return; }
   say(''); setBusy(true); $('results').textContent = '';
-  var tabs = null, tabs2 = null;
+  var tabs = null, tabs2 = null, out = null, view = null, err = null, t0 = Date.now();
+  rep = { diag: [], struct: [], offers: [] };
   try {
     var kill = W.enabledMap();
     function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: updateProgress, maxTabs: 1, perStoreMs: 50000, retryTimeouts: false }; }
     initProgress(kill); diag = {}; struct = {}; retry = false;
     tabs = W.createWebTabs(pluginApi(), { probe: true }); wt = tabs;
-    var out = await R.runAll(tabs, opts(kill));
+    out = await R.runAll(tabs, opts(kill));
     var bad = W.failingLabels(out.runs);
     if (bad.length) {
       say('Second try for ' + bad.join(', ') + ' with a desktop identity...');
@@ -142,19 +157,21 @@ async function onSubmit(ev) {
     }
     var tl = V.timeLine(out); if (tl) { var pt = el('p', 'note', tl); pt.id = 'ptime'; $('progress').appendChild(pt); }
     var res = SmartSetu.compareAny({ query: q, searches: out.snapshots, products: [], seenAt: out.seenAt });
-    var view = V.buildView(res, out.runs, out.seenAt);
+    view = V.buildView(res, out.runs, out.seenAt);
     render(view);
     showDiag();
     await readOffers(out, q, tabs, tabs2, view);
     say('');
   } catch (e) {
+    err = String((e && e.message) || e);
     say('Something went wrong, nothing was compared. Please try again.');
     $('empty').hidden = false;
-  } finally { if (tabs) tabs.dispose(); if (tabs2) tabs2.dispose(); retry = false; setBusy(false); }
+  } finally { if (tabs) tabs.dispose(); if (tabs2) tabs2.dispose(); retry = false; try { showReport(q, out, view, err, t0); } catch (_) {} setBusy(false); }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
   $('form').addEventListener('submit', onSubmit);
+  $('copyrep').addEventListener('click', copyReport);
   // A store link opens in the phone's own browser window (Chrome Custom Tab), not inside the app page.
   $('results').addEventListener('click', function (ev) {
     var a = ev.target && ev.target.closest ? ev.target.closest('a[href]') : null;

@@ -157,7 +157,7 @@ function pageUndef() { return undefined; }
   var card = mk('div', 'card x', [mk('a', 'lnk', [mk('span', 't', [], 'Apple iPhone 17 Pro')], '', '/p/apple-iphone-17-pro/itm1'), mk('div', 'pr', [mk('span', 'now', [], '\u20b91,27,900')])]);
   var root = wire(mk('body', '', [mk('div', 'grid', [card, mk('div', 'x', [mk('span', 'now', [], '\u20b9999')])])]));
   global.document = { querySelectorAll: function (s) { return s === 'a[href]' ? allOf(root).filter(function (c) { return c.tagName === 'A'; }) : allOf(root); } };
-  var d8 = W.structureProbe(); delete global.document;
+  var d8 = await W.structureProbe(); delete global.document;
   ok(d8.anchors === 1 && d8.priceLeaves === 2 && d8.samples.length === 2 && d8.samples[0].price === '\u20b91,27,900' && /^span\.now < div\.pr < div\.card/.test(d8.samples[0].chain) && d8.samples[0].href === '/p/apple-iphone-17-pro/itm1' && /Apple iPhone 17 Pro/.test(d8.samples[0].text) && /div\.grid/.test(d8.samples[1].chain), 'E8 structureProbe gives price element chain, link and text of the card');
   ok(/Sample 1: /.test(W.structLines('Flipkart', { ok: true, result: d8 }).join('|')) && /could not read/.test(W.structLines('Croma', { ok: false, error: 'x' })[0]), 'E8 structLines');
 
@@ -183,8 +183,34 @@ function pageUndef() { return undefined; }
   var deep = mk('span', 'p', [], '\u20b91,27,900'); for (var iD = 0; iD < 10; iD++) deep = mk('div', 'w' + iD, [deep]);
   var rootD = wire(mk('body', '', [mk('div', 'card', [mk('a', 'l', [], '', '/p/deep'), deep])]));
   global.document = { querySelectorAll: function (s) { return s === 'a[href]' ? allOf(rootD).filter(function (c) { return c.tagName === 'A'; }) : allOf(rootD); } };
-  var dD = W.structureProbe(); delete global.document;
+  var dD = await W.structureProbe(); delete global.document;
   ok(dD.samples.length === 1 && dD.samples[0].href === '/p/deep' && dD.samples[0].chain.split(' < ').length === 12, 'F6 structure looks 14 levels up for the card link (was 8)');
+
+  // G: S14-1e (one read answers every open question about an empty store; copy report)
+  function wire2(n) { wire(n); (function w(x) { x.getAttribute = function (k) { return k === 'href' ? x._h : (x._a && Object.prototype.hasOwnProperty.call(x._a, k) ? x._a[k] : null); }; x.attributes = Object.keys(x._a || {}).map(function (k) { return { name: k }; }); x.children.forEach(w); })(n); return n; }
+  var cardG = mk('div', 'card y', [mk('span', 't', [], 'Apple iPhone 17 Pro'), mk('span', 'now', [], '\u20b91,27,900')]); cardG._a = { onclick: 'go()' };
+  var rootG = wire2(mk('body', '', [mk('div', 'grid', [cardG, mk('a', 'dead', [], 'x', '')])]));
+  rootG.children[0].children[1]._h = '';
+  var bodyG = { innerText: 'Access denied. Please verify you are human (captcha). Update pincode', scrollHeight: 0 };
+  global.document = { body: bodyG, querySelectorAll: function (s) { return s === 'a[href]' ? allOf(rootG).filter(function (c) { return c.tagName === 'A'; }) : allOf(rootG); } };
+  var dG = await W.structureProbe(); delete global.document;
+  ok(dG.textLen === bodyG.innerText.length && dG.emptyHref === 1 && dG.clickable === 1 && dG.frames === 0 && dG.shadow === 0, 'G1 structureProbe counts text length, empty-href links, clickable non-links, iframes, shadow roots');
+  ok(dG.markers.indexOf('captcha') >= 0 && dG.markers.indexOf('access denied') >= 0 && dG.markers.indexOf('pincode') >= 0 && dG.markers.indexOf('robot') < 0, 'G2 structureProbe lists page markers (captcha, access denied, pincode) and only those present');
+  ok(/^body\(div\.grid/.test(dG.skeleton) && /div\.card\[onclick\]/.test(dG.skeleton) && /span\.now/.test(dG.skeleton) && dG.skeleton.indexOf('Apple') < 0 && dG.skeleton.indexOf('go()') < 0, 'G3 skeleton has tag, class and attribute names only, no page text and no attribute values');
+  ok(Array.isArray(dG.scroll) && dG.scroll.length === 0 && dG.after === null && typeof dG.hints.productClass === 'number', 'G4 no window to scroll in Node: scroll list empty, no crash');
+  var gridS = mk('div', 'grid', []), rootS = wire2(mk('body', '', [gridS])), scrolled = 0;
+  global.window = { scrollTo: function () { scrolled++; if (scrolled === 1) { var c = mk('div', 'card z', [mk('span', 'now', [], '\u20b954,999')]); c.parentElement = gridS; gridS.children.push(c); wire2(c); } } };
+  global.document = { body: { innerText: 'x', scrollHeight: 900 }, querySelectorAll: function (s) { return s === 'a[href]' ? [] : allOf(rootS); } };
+  var dS = await W.structureProbe(); delete global.document; delete global.window;
+  ok(scrolled === 3 && dS.priceLeaves === 0 && dS.scroll.length === 3 && dS.scroll[0].leaves === 1 && dS.after && dS.after.priceLeaves === 1 && dS.after.samples[0].price === '\u20b954,999', 'G5 scrolls 3 times, recounts, and reads the card shape again when the first read had no price element (late loading)');
+  var docG = { title: 'T', body: { innerText: 'Hello pincode' }, querySelectorAll: function () { return []; } };
+  var rG = await W.readPage(W.createWebTabs(mockPlugin({ doc: docG }).api), 'https://www.croma.com/s', W.structureProbe, { settleMs: 5 });
+  ok(rG.ok && rG.result.textLen === 13 && rG.result.markers.join() === 'pincode' && rG.result.scroll.length === 0, 'G6 structureProbe runs as page source text through the bridge (async, no window.scrollTo)');
+  var sl = W.structLines('Flipkart', { ok: true, result: dS }).join('|'), sl2 = W.structLines('Flipkart', { ok: true, result: dG }).join('|');
+  ok(/After scrolling: 1\) price elements 1/.test(sl) && /After-scroll sample 1: \u20b954,999/.test(sl) && /Page text length: \d+, iframes: 0, shadow roots: 0, links with empty href: 1, clickable non-links: 1/.test(sl2) && /Markers on page: .*captcha/.test(sl2) && /Skeleton: body\(div\.grid/.test(sl2) && /Hints: product\/card classes \d+/.test(sl2), 'G7 structLines shows the new fields');
+  var rpt = W.buildReport({ version: '0.6.0', query: 'iphone 17pro', seenAt: 'now', totalS: 400, ua: 'Chrome/140.0.0.0', error: 'boom', runs: [{ store: 'Amazon', state: 'ok', cards: 24, ms: 11200 }, { store: 'Flipkart', state: 'no_cards', cards: 0, ms: 61000, retried: true }], rows: [{ store: 'Reliance Digital', title: 'Apple iPhone 17 Pro 256 GB, Silver', price: '\u20b91,29,900' }], diag: ['Croma', 'Title: T'], struct: [], offers: ['Amazon product page'] });
+  ok(/test build 0\.6\.0/.test(rpt) && /ERROR during the run: boom/.test(rpt) && /- Amazon \| ok \| 24 \| 11 \| 1st/.test(rpt) && /- Flipkart \| no_cards \| 0 \| 61 \| 2nd try \(desktop identity\)/.test(rpt) && /- Reliance Digital \| \u20b91,29,900 \| Apple iPhone 17 Pro 256 GB, Silver/.test(rpt) && /PAGE STRUCTURE\n- \(none\)/.test(rpt) && /OFFERS FROM PRODUCT PAGES\nAmazon product page/.test(rpt), 'G8 buildReport: stores with state, count, seconds and pass; rows; sections; empty section says none; error line');
+  ok(W.buildReport().split('\n').length > 5 && /RESULT ROWS[^]*- \(none\)/.test(W.buildReport()), 'G9 buildReport with no data does not throw');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -218,7 +244,7 @@ function pageUndef() { return undefined; }
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.5.0' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
+  ok(pkg.version === '0.6.0' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 2 && appjs.indexOf('.runAll(') > appjs.indexOf('async function onSubmit') && /addEventListener\('submit', onSubmit\)/.test(appjs), 'D5 runAll only inside the Compare submit handler (D-010)');
@@ -228,6 +254,8 @@ function pageUndef() { return undefined; }
   ok(order.every(function (x, i) { return x >= 0 && (i === 0 || x > order[i - 1]); }), 'D7 index.html loads the 5 scripts in order');
   ok(html.indexOf('<form') >= 0 && html.indexOf('viewport-fit=cover') >= 0 && html.indexOf('SmartSetu') >= 0 && html.indexOf('Spike') < 0, 'D8 index.html is the app screen (form, safe area, no spike text)');
   ok(/workflow_dispatch/.test(yml) && !/^\s+push:/m.test(yml) && /smartsetu-debug-apk/.test(yml) && /npm test/.test(yml), 'D9 workflow is manual, runs tests, artifact name smartsetu-debug-apk');
+  ok(/function showReport\(/.test(appjs) && /function copyReport\(/.test(appjs) && /W\.buildReport\(/.test(appjs) && /finally \{[^}]*showReport\(q, out, view, err, t0\)/.test(appjs) && /navigator\.clipboard/.test(appjs) && /execCommand\('copy'\)/.test(appjs) && /\.then\(function \(\) \{[^}]*\}, fallback\); else fallback\(\);/.test(appjs) && /addEventListener\('click', copyReport\)/.test(appjs), 'D11 app builds the report in finally (also after an error) and copies it by clipboard with a select fallback');
+  ok(/id="report"[^>]*hidden/.test(html) && /id="copyrep"/.test(html) && /id="reptext"[^>]*readonly/.test(html), 'D12 index.html has the hidden report box, Copy button and read-only text box');
   ok(fs.existsSync(path.join(__dirname, '.gitignore')) && /www\/app\.js/.test(read('.gitignore')), 'D10 built www/app.js stays out of git');
   console.log('test_app: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);

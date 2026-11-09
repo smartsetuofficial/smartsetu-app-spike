@@ -216,26 +216,76 @@ async function offerProbe() {
   });
   return { title: String(document.title || '').slice(0, 100), url: String(location.href).slice(0, 200), clicked: clicked, total: out.length, lines: out.slice(0, 40) };
 }
-function structureProbe() {
+async function structureProbe() {
+  // S14-1e: one read answers every open question about an empty store (same page function for every store, D-073). Only counts, tag/class names and short text; nothing is stored or sent.
   function cls(e) { return String(e.tagName || '').toLowerCase() + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/)[0].slice(0, 40) : ''); }
-  var all = document.querySelectorAll('body *'), leaves = [], n = 0;
-  for (var i = 0; i < all.length; i++) {
-    var e = all[i];
-    if (e.children && e.children.length === 0 && /^\s*\u20b9\s?[\d,]{3,}/.test(e.textContent || '')) { n++; if (leaves.length < 3) leaves.push(e); }
-  }
-  var samples = leaves.map(function (leaf) {
-    var chain = [cls(leaf)], a = leaf.parentElement, link = null;
-    for (var k = 0; k < 14 && a; k++) {
-      chain.push(cls(a));
-      link = a.querySelector ? a.querySelector('a[href]') : null;
-      if (link && String(a.textContent || '').length < 400) break;
-      link = null; a = a.parentElement;
+  var priceRx = /^\s*\u20b9\s?[\d,]{3,}/;
+  function grab() {
+    var all = document.querySelectorAll('body *'), leaves = [], n = 0;
+    for (var i = 0; i < all.length; i++) {
+      var e = all[i];
+      if (e.children && e.children.length === 0 && priceRx.test(e.textContent || '')) { n++; if (leaves.length < 3) leaves.push(e); }
     }
-    return { price: String(leaf.textContent || '').trim().slice(0, 20), chain: chain.join(' < '), href: link ? String(link.getAttribute('href') || '').slice(0, 90) : '', text: a ? String(a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100) : '' };
-  });
+    var samples = leaves.map(function (leaf) {
+      var chain = [cls(leaf)], a = leaf.parentElement, link = null;
+      for (var k = 0; k < 14 && a; k++) {
+        chain.push(cls(a));
+        link = a.querySelector ? a.querySelector('a[href]') : null;
+        if (link && String(a.textContent || '').length < 400) break;
+        link = null; a = a.parentElement;
+      }
+      return { price: String(leaf.textContent || '').trim().slice(0, 20), chain: chain.join(' < '), href: link ? String(link.getAttribute('href') || '').slice(0, 90) : '', text: a ? String(a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100) : '' };
+    });
+    return { all: all, leaves: leaves, n: n, samples: samples };
+  }
+  function bodyText() { try { return String((document.body && (document.body.innerText || document.body.textContent)) || ''); } catch (e) { return ''; } }
+  function skel(e, d, st) {
+    if (!e || st.n >= 30 || d > 4) return '';
+    st.n++;
+    var at = [], as2 = e.attributes || [];
+    try { for (var i2 = 0; i2 < as2.length && at.length < 6; i2++) { var nm = as2[i2].name; if (nm !== 'class' && nm !== 'style') at.push(nm); } } catch (x) {}
+    var kids = e.children || [], parts = [];
+    for (var k2 = 0; k2 < kids.length && k2 < 6; k2++) { var c = skel(kids[k2], d + 1, st); if (c) parts.push(c); }
+    return cls(e) + (at.length ? '[' + at.join(',') + ']' : '') + (parts.length ? '(' + parts.join(' ') + ')' : '');
+  }
+  var g0 = grab(), all = g0.all;
   var ls = [], as = document.querySelectorAll('a[href]');
   for (var j = 0; j < as.length && ls.length < 4; j++) { var h = String(as[j].getAttribute('href') || ''); if (h.length > 1 && h.charAt(0) !== '#') ls.push(h.slice(0, 80) + ' "' + String(as[j].textContent || '').replace(/\s+/g, ' ').trim().slice(0, 30) + '"'); }
-  return { anchors: as.length, priceLeaves: n, samples: samples, linkSamples: ls };
+  var emptyHref = 0, clickable = 0, shadow = 0, frames = 0;
+  try {
+    for (var q = 0; q < all.length; q++) {
+      var e2 = all[q], tg = String(e2.tagName || '').toUpperCase();
+      if (tg === 'IFRAME') frames++;
+      if (e2.shadowRoot) shadow++;
+      if (e2.getAttribute) {
+        if (tg === 'A') { var hh = e2.getAttribute('href'); if (hh == null || hh === '' || hh === '#' || /^javascript/i.test(hh)) emptyHref++; }
+        if (e2.getAttribute('onclick') != null || e2.getAttribute('data-href') != null || e2.getAttribute('data-url') != null || e2.getAttribute('role') === 'link') clickable++;
+      }
+    }
+  } catch (e) {}
+  var txt = bodyText(), low = txt.toLowerCase(), marks = [], mk = ['captcha', 'access denied', 'verify you are human', 'unusual traffic', 'robot', 'blocked', 'pincode', 'pin code', 'select location', 'enable cookies', 'something went wrong', 'no results'];
+  for (var m = 0; m < mk.length; m++) if (low.indexOf(mk[m]) >= 0) marks.push(mk[m]);
+  var hints = { productClass: 0, images: 0, loading: 0 };
+  try {
+    hints.productClass = document.querySelectorAll('[class*="product"], [class*="plp"], [class*="card"]').length;
+    hints.images = document.querySelectorAll('img').length;
+    hints.loading = document.querySelectorAll('[class*="skeleton"], [class*="shimmer"], [class*="loader"], [class*="spinner"]').length;
+  } catch (e) {}
+  var sk = '';
+  try { var sb = g0.leaves[0]; for (var u = 0; u < 6 && sb && sb.parentElement; u++) sb = sb.parentElement; if (sb) sk = skel(sb, 0, { n: 0 }).slice(0, 700); } catch (e) {}
+  var sc = [], after = null;
+  try {
+    if (typeof window !== 'undefined' && window.scrollTo && document.body) {
+      for (var s = 0; s < 3; s++) {
+        window.scrollTo(0, document.body.scrollHeight || 100000);
+        await new Promise(function (r) { setTimeout(r, 1500); });
+        var gs = grab();
+        sc.push({ leaves: gs.n, anchors: document.querySelectorAll('a[href]').length, text: bodyText().length, height: Number(document.body.scrollHeight) || 0 });
+        if (g0.n === 0 && gs.n > 0) after = { priceLeaves: gs.n, samples: gs.samples };
+      }
+    }
+  } catch (e) {}
+  return { anchors: as.length, priceLeaves: g0.n, samples: g0.samples, linkSamples: ls, textLen: txt.length, emptyHref: emptyHref, clickable: clickable, shadow: shadow, frames: frames, markers: marks, hints: hints, skeleton: sk, scroll: sc, after: after };
 }
 function shortUrl(u) { try { var x = new URL(u); return (x.hostname + x.pathname).slice(0, 120); } catch (_) { return String(u).slice(0, 120); } }
 function offerLines(label, url, res) {
@@ -244,15 +294,36 @@ function offerLines(label, url, res) {
   return [label + ' product page', 'Page: ' + shortUrl(d.url || url), 'Title: ' + (d.title || '(none)'), 'Offer-like lines: ' + (Number(d.total) || 0) + ' (expanded ' + (Number(d.clicked) || 0) + ')']
     .concat((d.lines || []).map(function (l) { return '- ' + l; }));
 }
+function sampleLine(s, i, tag) { return tag + ' ' + (i + 1) + ': ' + s.price + ' | ' + s.chain + ' | ' + s.href + ' | ' + s.text; }
 function structLines(label, res) {
   if (!res || !res.ok) return [label + ' structure: could not read (' + String((res && res.error) || 'no answer').slice(0, 80) + ')'];
-  var d = res.result || {};
-  return [label + ' structure', 'Links: ' + (Number(d.anchors) || 0) + ', price elements: ' + (Number(d.priceLeaves) || 0)]
-    .concat((d.samples || []).map(function (s, i) { return 'Sample ' + (i + 1) + ': ' + s.price + ' | ' + s.chain + ' | ' + s.href + ' | ' + s.text; }))
+  var d = res.result || {}, h = d.hints || {}, out = [label + ' structure', 'Links: ' + (Number(d.anchors) || 0) + ', price elements: ' + (Number(d.priceLeaves) || 0)]
+    .concat((d.samples || []).map(function (s, i) { return sampleLine(s, i, 'Sample'); }))
     .concat((d.linkSamples || []).map(function (l, i) { return 'Link ' + (i + 1) + ': ' + l; }));
+  if (d.textLen != null) out.push('Page text length: ' + d.textLen + ', iframes: ' + (d.frames || 0) + ', shadow roots: ' + (d.shadow || 0) + ', links with empty href: ' + (d.emptyHref || 0) + ', clickable non-links: ' + (d.clickable || 0));
+  if (d.markers) out.push('Markers on page: ' + (d.markers.length ? d.markers.join(', ') : 'none'));
+  if (d.hints) out.push('Hints: product/card classes ' + (h.productClass || 0) + ', images ' + (h.images || 0) + ', loading placeholders ' + (h.loading || 0));
+  if (d.skeleton) out.push('Skeleton: ' + d.skeleton);
+  if (d.scroll && d.scroll.length) out.push('After scrolling: ' + d.scroll.map(function (x, i) { return (i + 1) + ') price elements ' + x.leaves + ', links ' + x.anchors + ', text ' + x.text + ', height ' + x.height; }).join('; '));
+  else if (d.scroll) out.push('After scrolling: not possible on this page');
+  if (d.after) out = out.concat([('After scrolling, price elements: ' + d.after.priceLeaves)]).concat((d.after.samples || []).map(function (s, i) { return sampleLine(s, i, 'After-scroll sample'); }));
+  return out;
+}
+// S14-1e: one plain-text report of the whole run (the owner taps Copy and pastes it). Pure function, text only. p = { version, query, seenAt, totalS, ua, runs, rows, diag, struct, offers, error }
+function buildReport(p) {
+  p = p || {};
+  var L = ['SmartSetu app report (test build ' + (p.version || '?') + ')', 'Query: ' + (p.query || '') + ' | Seen at: ' + (p.seenAt || '') + ' | Total: ' + (p.totalS == null ? '?' : p.totalS) + ' s', 'Browser: ' + (p.ua || '?')];
+  if (p.error) L.push('ERROR during the run: ' + String(p.error).slice(0, 200));
+  L.push('', 'STORES (state | listings | seconds | pass)');
+  (p.runs || []).forEach(function (r) { L.push('- ' + r.store + ' | ' + r.state + ' | ' + (r.cards == null ? '-' : r.cards) + ' | ' + (r.ms >= 1000 ? Math.round(r.ms / 1000) : (r.ms || 0)) + ' | ' + (r.retried ? '2nd try (desktop identity)' : '1st')); });
+  L.push('', 'RESULT ROWS (store | price | title)');
+  (p.rows || []).forEach(function (r) { L.push('- ' + r.store + ' | ' + (r.price || '-') + ' | ' + String(r.title || '').slice(0, 70)); });
+  if (!(p.rows || []).length) L.push('- (none)');
+  [['DIAGNOSTIC', p.diag], ['PAGE STRUCTURE', p.struct], ['OFFERS FROM PRODUCT PAGES', p.offers]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
+  return L.join('\n');
 }
 
 var api = { createWebTabs: createWebTabs, detailOf: detailOf, enabledMap: enabledMap, lineText: lineText, diagLines: diagLines, OFF_TEXT: OFF_TEXT,
   sameSite: sameSite, failingLabels: failingLabels, enabledOnly: enabledOnly, mergeRuns: mergeRuns, pickProduct: pickProduct, pickFromView: pickFromView, rowsOf: rowsOf, readPage: readPage,
-  offerProbe: offerProbe, structureProbe: structureProbe, offerLines: offerLines, structLines: structLines };
+  offerProbe: offerProbe, structureProbe: structureProbe, offerLines: offerLines, structLines: structLines, buildReport: buildReport };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
