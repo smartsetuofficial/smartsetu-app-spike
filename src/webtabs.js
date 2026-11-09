@@ -121,5 +121,105 @@ function createWebTabs(plugin, o) {
   return { tabs: tabs, scripting: scripting, dispose: dispose, lastProbe: function () { return lastProbe; } };
 }
 
-var api = { createWebTabs: createWebTabs, detailOf: detailOf, enabledMap: enabledMap, lineText: lineText, diagLines: diagLines, OFF_TEXT: OFF_TEXT };
+// ---- S14-1c data build (D-083): second try with a Chrome identity, page structure of still-empty stores, offers read from one product page per store.
+function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+function sameSite(a, b) { var x = String(a).toLowerCase().split('.').slice(-2).join('.'), y = String(b).toLowerCase().split('.').slice(-2).join('.'); return x === y; }
+function failingLabels(runs) { return (runs || []).filter(function (r) { return r.state === 'no_cards' || r.state === 'no_data'; }).map(function (r) { return r.store; }); }
+function enabledOnly(stores, labels) { var m = {}; stores.forEach(function (s) { m[s.label] = labels.indexOf(s.label) >= 0; }); return m; }
+// Put the runs of the second pass into the first result (same store label), then rebuild the snapshot list. Stores that were off in the second pass are skipped.
+function mergeRuns(out, out2) {
+  (out2.runs || []).forEach(function (r2) {
+    if (r2.state === 'off') return;
+    for (var i = 0; i < out.runs.length; i++) if (out.runs[i].store === r2.store) { r2.retried = true; out.runs[i] = r2; }
+  });
+  out.snapshots = out.runs.filter(function (r) { return r.snapshot; }).map(function (r) { return r.snapshot; });
+  return out;
+}
+// First usable listing of a store: not an ad, https, same site as the search page, the one that contains the first word of the query wins.
+function pickProduct(cards, query, searchUrl) {
+  var base; try { base = new URL(searchUrl); } catch (_) { return null; }
+  var word = String(query || '').toLowerCase().split(/\s+/)[0] || '', best = null;
+  (cards || []).forEach(function (c) {
+    if (!c || c.ad || c.sponsored || !c.link) return;
+    var u; try { u = new URL(c.link, base); } catch (_) { return; }
+    if (u.protocol !== 'https:' || !sameSite(u.hostname, base.hostname)) return;
+    var rel = !!word && String(c.html || '').toLowerCase().indexOf(word) >= 0;
+    if (!best || (rel && !best.rel)) best = { url: u.href, rel: rel };
+  });
+  return best ? { url: best.url } : null;
+}
+// Open one page, wait, run one page function, always close. Never throws.
+async function readPage(wt, url, func, o) {
+  o = o || {};
+  var loadMs = o.loadMs == null ? 30000 : o.loadMs, settleMs = o.settleMs == null ? 3000 : o.settleMs, id = null;
+  try {
+    var t = await wt.tabs.create({ url: url, active: false }); id = t.id;
+    var t0 = Date.now();
+    while (Date.now() - t0 < loadMs) { var g = await wt.tabs.get(id); if (g.status === 'complete') break; await sleep(250); }
+    await sleep(settleMs);
+    var r = await wt.scripting.executeScript({ target: { tabId: id }, func: func, args: o.args || [] });
+    return { ok: true, result: r && r[0] ? r[0].result : null };
+  } catch (e) {
+    return { ok: false, error: String((e && e.message) || e) };
+  } finally {
+    if (id != null) { try { await wt.tabs.remove(id); } catch (_) {} }
+  }
+}
+// Page functions (self-contained, they run inside the store page). They only read text that is on the page.
+async function offerProbe() {
+  var re = /offer|coupon|bank|emi|cashback|discount|instant|no cost|% off|\bsave\b|\bsavings\b/i;
+  var rx = /^(view |see |all |more |show )?(bank )?(offers?|coupons?)( \(\d+\))?$|view all offers|view more offers|\+\s?\d+ (more )?offers?|^\d+ offers?$|more offers?/i;
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  var clicked = 0;
+  try {
+    var btns = document.querySelectorAll('button, [role="button"]');
+    for (var i = 0; i < btns.length && clicked < 3; i++) {
+      var tx = String(btns[i].innerText || btns[i].textContent || '').replace(/\s+/g, ' ').trim();
+      if (tx.length > 0 && tx.length < 40 && rx.test(tx)) { try { btns[i].click(); clicked++; await wait(900); } catch (e) {} }
+    }
+  } catch (e) {}
+  var t = String((document.body && (document.body.innerText || document.body.textContent)) || ''), seen = {}, out = [];
+  t.split(/\n+/).forEach(function (s) {
+    s = s.replace(/\s+/g, ' ').trim();
+    if (s.length < 6 || s.length > 160 || !re.test(s) || seen[s]) return;
+    seen[s] = 1; out.push(s);
+  });
+  return { title: String(document.title || '').slice(0, 100), url: String(location.href).slice(0, 200), clicked: clicked, total: out.length, lines: out.slice(0, 30) };
+}
+function structureProbe() {
+  function cls(e) { return String(e.tagName || '').toLowerCase() + (typeof e.className === 'string' && e.className.trim() ? '.' + e.className.trim().split(/\s+/)[0].slice(0, 40) : ''); }
+  var all = document.querySelectorAll('body *'), leaves = [], n = 0;
+  for (var i = 0; i < all.length; i++) {
+    var e = all[i];
+    if (e.children && e.children.length === 0 && /^\s*\u20b9\s?[\d,]{3,}/.test(e.textContent || '')) { n++; if (leaves.length < 3) leaves.push(e); }
+  }
+  var samples = leaves.map(function (leaf) {
+    var chain = [cls(leaf)], a = leaf.parentElement, link = null;
+    for (var k = 0; k < 8 && a; k++) {
+      chain.push(cls(a));
+      link = a.querySelector ? a.querySelector('a[href]') : null;
+      if (link && String(a.textContent || '').length < 400) break;
+      link = null; a = a.parentElement;
+    }
+    return { price: String(leaf.textContent || '').trim().slice(0, 20), chain: chain.join(' < '), href: link ? String(link.getAttribute('href') || '').slice(0, 90) : '', text: a ? String(a.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 100) : '' };
+  });
+  return { anchors: document.querySelectorAll('a[href]').length, priceLeaves: n, samples: samples };
+}
+function shortUrl(u) { try { var x = new URL(u); return (x.hostname + x.pathname).slice(0, 120); } catch (_) { return String(u).slice(0, 120); } }
+function offerLines(label, url, res) {
+  if (!res || !res.ok) return [label + ': could not read the product page (' + String((res && res.error) || 'no answer').slice(0, 80) + ')'];
+  var d = res.result || {};
+  return [label + ' product page', 'Page: ' + shortUrl(d.url || url), 'Title: ' + (d.title || '(none)'), 'Offer-like lines: ' + (Number(d.total) || 0) + ' (expanded ' + (Number(d.clicked) || 0) + ')']
+    .concat((d.lines || []).map(function (l) { return '- ' + l; }));
+}
+function structLines(label, res) {
+  if (!res || !res.ok) return [label + ' structure: could not read (' + String((res && res.error) || 'no answer').slice(0, 80) + ')'];
+  var d = res.result || {};
+  return [label + ' structure', 'Links: ' + (Number(d.anchors) || 0) + ', price elements: ' + (Number(d.priceLeaves) || 0)]
+    .concat((d.samples || []).map(function (s, i) { return 'Sample ' + (i + 1) + ': ' + s.price + ' | ' + s.chain + ' | ' + s.href + ' | ' + s.text; }));
+}
+
+var api = { createWebTabs: createWebTabs, detailOf: detailOf, enabledMap: enabledMap, lineText: lineText, diagLines: diagLines, OFF_TEXT: OFF_TEXT,
+  sameSite: sameSite, failingLabels: failingLabels, enabledOnly: enabledOnly, mergeRuns: mergeRuns, pickProduct: pickProduct, readPage: readPage,
+  offerProbe: offerProbe, structureProbe: structureProbe, offerLines: offerLines, structLines: structLines };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

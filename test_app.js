@@ -33,7 +33,7 @@ function mockPlugin(opt) {
     exec: function (o) {
       st.execs++; st.lastCode = o.code;
       if (opt.noBridge) return Promise.resolve();
-      var sb = { location: { href: urls[o.id] || '' }, document: { title: 'Access denied', body: { innerText: 'Please   verify\n you are human' }, querySelectorAll: function () { return [1, 2, 3]; } }, FX: fxSnap, console: console, JSON: JSON, Promise: Promise, setTimeout: setTimeout, String: String };
+      var sb = { location: { href: urls[o.id] || '' }, document: opt.doc || { title: 'Access denied', body: { innerText: 'Please   verify\n you are human' }, querySelectorAll: function () { return [1, 2, 3]; } }, FX: fxSnap, console: console, JSON: JSON, Promise: Promise, setTimeout: setTimeout, String: String };
       sb.window = { mobileApp: { postMessage: function (m) { if (opt.dropExec && m.detail && m.detail.kind === 'exec') return; setTimeout(function () { st.msgFns.forEach(function (f) { f(opt.rawStyle ? { rawMessage: JSON.stringify(m) } : m); }); }, 1); } } };
       sb.window.location = sb.location;
       try { vm.runInNewContext(o.code, sb, { timeout: 2000 }); } catch (e) { return Promise.reject(e); }
@@ -117,6 +117,50 @@ function pageUndef() { return undefined; }
   await w10b.scripting.executeScript({ target: { tabId: t10b.id }, func: pageOk, args: ['q', 1] });
   ok(w10b.lastProbe() === null && !/probeNow/.test(String(p10b.lastCode || '')), 'A10 no probe unless asked');
 
+  // E: S14-1c data build helpers
+  ok(W.sameSite('www.amazon.in', 'amazon.in') && W.sameSite('m.flipkart.com', 'www.flipkart.com') && !W.sameSite('amazon.in', 'amazon.com'), 'E1 sameSite');
+  var runsE = [{ store: 'Amazon', state: 'ok', snapshot: { cards: [1] } }, { store: 'Flipkart', state: 'no_cards' }, { store: 'Myntra', state: 'off' }, { store: 'Croma', state: 'no_data' }, { store: 'Nykaa', state: 'error' }];
+  ok(JSON.stringify(W.failingLabels(runsE)) === '["Flipkart","Croma"]', 'E2 only no_cards and no_data are retried');
+  var enE = W.enabledOnly(R.STORES, ['Flipkart']);
+  ok(enE.Flipkart === true && enE.Amazon === false && enE.Myntra === false && Object.keys(enE).length === 9, 'E3 enabledOnly turns on just the named stores');
+  var outE = { runs: runsE.slice(), snapshots: [] };
+  W.mergeRuns(outE, { runs: [{ store: 'Flipkart', state: 'ok', snapshot: { cards: [2] } }, { store: 'Amazon', state: 'off' }, { store: 'Croma', state: 'no_cards' }] });
+  ok(outE.runs[1].state === 'ok' && outE.runs[1].retried === true && outE.runs[0].state === 'ok' && !outE.runs[0].retried && outE.runs[3].state === 'no_cards' && outE.snapshots.length === 2, 'E4 mergeRuns replaces retried stores, skips off, rebuilds snapshots');
+  var cardsE = [{ ad: true, link: 'https://www.amazon.in/sspa/x', html: 'iphone' }, { link: 'https://evil.example/p/1', html: 'iphone' }, { link: 'http://www.amazon.in/dp/1', html: 'iphone' }, { sponsored: true, link: 'https://www.amazon.in/dp/2', html: 'iphone' }, { link: '/dp/B0CASE', html: 'phone case' }, { link: '/dp/B0IPHONE', html: 'Apple iPhone 17 Pro' }];
+  var pk = W.pickProduct(cardsE, 'iphone 17pro', 'https://www.amazon.in/s?k=iphone');
+  ok(pk && pk.url === 'https://www.amazon.in/dp/B0IPHONE', 'E5 pickProduct skips ads, other sites, http; prefers the listing with the first query word');
+  ok(W.pickProduct([{ link: '/dp/1', html: 'x' }], 'iphone', 'https://www.amazon.in/s?k=a').url === 'https://www.amazon.in/dp/1' && W.pickProduct([], 'a', 'https://www.amazon.in/s') === null && W.pickProduct([{ link: '/p/1' }], 'a', 'not a url') === null, 'E5 fallbacks: first usable, none, bad search url');
+  // E6 readPage: opens hidden, waits for load, runs the function, always closes, never throws
+  var p6 = mockPlugin(), w6 = W.createWebTabs(p6.api);
+  var r6 = await W.readPage(w6, 'https://www.amazon.in/dp/1', pageOk, { args: ['q', 5], settleMs: 5 });
+  ok(r6.ok && r6.result.n === 5 && p6.opened[0].visible === false && p6.closed.length === 1 && p6.open === 0, 'E6 readPage returns the result and closes the page');
+  var r6b = await W.readPage(w6, 'https://www.amazon.in/dp/1', pageThrow, { settleMs: 5 });
+  ok(r6b.ok === false && /boom/.test(r6b.error) && p6.open === 0, 'E6 readPage reports a page error and still closes');
+  var p6c = mockPlugin({ noBridge: true }), w6c = W.createWebTabs(p6c.api, { execMs: 40 });
+  var r6c = await W.readPage(w6c, 'https://a.test/', pageOk, { settleMs: 5 });
+  ok(r6c.ok === false && /no answer/.test(r6c.error) && p6c.open === 0, 'E6 readPage reports a silent page and closes');
+  // E7 offerProbe through the real injection path with a fake page
+  var clicks = [];
+  var docO = { title: 'Apple iPhone 17 Pro | Store', body: { innerText: 'Apple iPhone 17 Pro\n\u20b91,29,900\nBank Offer\n10% Instant Discount on HDFC Bank Credit Card\nBuy now\nNo cost EMI from \u20b95,000 per month\nBank Offer\nsome very long line ' + new Array(40).join('offer ') + '\nDelivery by Tuesday' }, querySelectorAll: function () { return [{ innerText: 'Add to cart', click: function () { clicks.push('cart'); } }, { innerText: 'View all offers', click: function () { clicks.push('offers'); } }]; } };
+  var p7 = mockPlugin({ doc: docO }), w7 = W.createWebTabs(p7.api);
+  var r7 = await W.readPage(w7, 'https://www.flipkart.com/p/1', W.offerProbe, { settleMs: 5 });
+  var d7 = r7.result || {};
+  ok(r7.ok && d7.clicked === 1 && clicks.join() === 'offers' && d7.total === 3 && d7.lines.indexOf('10% Instant Discount on HDFC Bank Credit Card') >= 0 && d7.lines.indexOf('Buy now') < 0 && d7.lines.filter(function (l) { return l === 'Bank Offer'; }).length === 1, 'E7 offerProbe: clicks only the offers button, keeps offer lines once, drops other lines and very long lines');
+  var l7 = W.offerLines('Flipkart', 'https://www.flipkart.com/p/1', r7);
+  ok(l7[0] === 'Flipkart product page' && l7.indexOf('- Bank Offer') > 0 && /Offer-like lines: 3 \(expanded 1\)/.test(l7.join('|')), 'E7 offerLines text');
+  ok(/could not read/.test(W.offerLines('Croma', 'x', { ok: false, error: 'boom' })[0]), 'E7 offerLines on a failed read');
+  // E8 structureProbe on a small fake page tree
+  function mk(tag, cls, kids, text, href) { var n = { tagName: tag.toUpperCase(), className: cls, children: kids || [], parentElement: null, _t: text || '', _h: href || null }; n.children.forEach(function (c) { c.parentElement = n; }); return n; }
+  function txt(n) { return n._t + n.children.map(txt).join(' '); }
+  function allOf(n, o) { o = o || []; n.children.forEach(function (c) { o.push(c); allOf(c, o); }); return o; }
+  function wire(n) { Object.defineProperty(n, 'textContent', { get: function () { return txt(n); } }); n.getAttribute = function (k) { return k === 'href' ? n._h : null; }; n.querySelector = function () { return allOf(n).filter(function (c) { return c.tagName === 'A' && c._h; })[0] || null; }; n.children.forEach(wire); return n; }
+  var card = mk('div', 'card x', [mk('a', 'lnk', [mk('span', 't', [], 'Apple iPhone 17 Pro')], '', '/p/apple-iphone-17-pro/itm1'), mk('div', 'pr', [mk('span', 'now', [], '\u20b91,27,900')])]);
+  var root = wire(mk('body', '', [mk('div', 'grid', [card, mk('div', 'x', [mk('span', 'now', [], '\u20b9999')])])]));
+  global.document = { querySelectorAll: function (s) { return s === 'a[href]' ? allOf(root).filter(function (c) { return c.tagName === 'A'; }) : allOf(root); } };
+  var d8 = W.structureProbe(); delete global.document;
+  ok(d8.anchors === 1 && d8.priceLeaves === 2 && d8.samples.length === 2 && d8.samples[0].price === '\u20b91,27,900' && /^span\.now < div\.pr < div\.card/.test(d8.samples[0].chain) && d8.samples[0].href === '/p/apple-iphone-17-pro/itm1' && /Apple iPhone 17 Pro/.test(d8.samples[0].text) && /div\.grid/.test(d8.samples[1].chain), 'E8 structureProbe gives price element chain, link and text of the card');
+  ok(/Sample 1: /.test(W.structLines('Flipkart', { ok: true, result: d8 }).join('|')) && /could not read/.test(W.structLines('Croma', { ok: false, error: 'x' })[0]), 'E8 structLines');
+
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
     var pb = mockPlugin(), wb = W.createWebTabs(pb.api), seen = [];
@@ -149,10 +193,11 @@ function pageUndef() { return undefined; }
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.3.0' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
+  ok(pkg.version === '0.4.0' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
-  ok((appjs.match(/\.runAll\(/g) || []).length === 1 && appjs.indexOf('.runAll(') > appjs.indexOf('async function onSubmit') && /addEventListener\('submit', onSubmit\)/.test(appjs), 'D5 runAll only inside the Compare submit handler (D-010)');
+  ok((appjs.match(/\.runAll\(/g) || []).length === 2 && appjs.indexOf('.runAll(') > appjs.indexOf('async function onSubmit') && /addEventListener\('submit', onSubmit\)/.test(appjs), 'D5 runAll only inside the Compare submit handler (D-010)');
+  ok(/customUserAgent/.test(appjs) && /readOffers\(out, q, tabs, tabs2\)/.test(appjs) && /structureProbe/.test(appjs) && /offerProbe/.test(appjs) && /chromeUa\(navigator\.userAgent\)/.test(appjs) && /retry && run\.state === 'off'/.test(appjs), 'D6b second try, structure and offers are wired');
   ok(/maxTabs: 1/.test(appjs) && /foreground: false/.test(appjs) && /enabledMap\(\)/.test(appjs), 'D6 one store at a time, hidden, Myntra off');
   var order = ['bundle.js', 'pagesnap.js', 'runner_core.js', 'view.js', 'app.js'].map(function (f) { return html.indexOf('src="' + f + '"'); });
   ok(order.every(function (x, i) { return x >= 0 && (i === 0 || x > order[i - 1]); }), 'D7 index.html loads the 5 scripts in order');
