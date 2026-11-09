@@ -332,7 +332,7 @@ function buildReport(p) {
   L.push('', 'RESULT ROWS (store | price | title)');
   (p.rows || []).forEach(function (r) { L.push('- ' + r.store + ' | ' + (r.price || '-') + ' | ' + String(r.title || '').slice(0, 70)); });
   if (!(p.rows || []).length) L.push('- (none)');
-  [['ALL LISTINGS READ (per store: in result or not | price | where the title came from | title)', p.listings], ['DIAGNOSTIC', p.diag], ['PAGE STRUCTURE', p.struct], ['OFFERS FROM PRODUCT PAGES', p.offers]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
+  [['ALL LISTINGS READ (per store: in result or not | price | where the title came from | title)', p.listings], ['DIAGNOSTIC', p.diag], ['PAGE STRUCTURE', p.struct], ['CARD RESCUE (S14-1g)', p.rescue], ['OFFERS FROM PRODUCT PAGES', p.offers]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
   return L.join('\n');
 }
 
@@ -403,8 +403,81 @@ async function slowRead(wt, store, query, collect, o) {
   return res;
 }
 
+// ---- S14-1g (D-089): card rescue for a store that stays empty (every store, D-073). Page function: price elements -> climb to the smallest ancestor that has one product link (and not a whole grid).
+// Reads only visible page text/attributes, sends nothing. If it still finds no card, it returns the first 3 price elements' cut html so the real page shape is visible in the report.
+async function cardRescue(waitMs) {
+  var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); };
+  var gap = waitMs == null ? 1200 : waitMs;
+  try { for (var sc = 1; sc <= 3; sc++) { window.scrollTo(0, ((document.body && document.body.scrollHeight) || 3000) * sc / 3); await wait(gap); } window.scrollTo(0, 0); await wait(gap); } catch (e) {}
+  var priceRx = /^(?:(?:(?:Discount|Offer|Sale|Selling|Special|Deal|Our|Final|Current)\s+)?Price\s*:?\s*)?(?:\u20b9|Rs\.?)\s?\d[\d,]*(?:\.\d+)?\.?$/i;
+  var KEEP = ['class', 'id', 'role', 'aria-label', 'title', 'alt', 'itemprop', 'data-testid', 'href'];
+  var DROP = /^(script|style|noscript|svg|iframe|form|input|textarea|select|link|template|canvas|video|audio|source)$/i;
+  var host = String(location.hostname || '').replace(/^www\./, '');
+  function txt(e) { return String(e.textContent || '').replace(/\s+/g, ' ').trim(); }
+  function inner(e) { return String(e.innerText != null ? e.innerText : e.textContent || ''); }
+  function struck1(e) { try { return String(getComputedStyle(e).textDecorationLine || '').indexOf('line-through') >= 0; } catch (_) { return false; } }
+  function isStruck(e) { if (struck1(e)) return true; var k = e.children || []; for (var i = 0; i < k.length; i++) if (k[i].children.length === 0 && struck1(k[i])) return true; return false; }
+  function same(a) { try { var u = new URL(a.href); return u.pathname !== '/' && (u.hostname === host || u.hostname === 'www.' + host || u.hostname.endsWith('.' + host)); } catch (_) { return false; } }
+  function links(p) { var o = [], q = p.querySelectorAll ? p.querySelectorAll('a[href]') : []; for (var i = 0; i < q.length; i++) if (!/^javascript/.test(q[i].href || '') && same(q[i])) o.push(q[i]); return o; }
+  function esc(t) { return String(t).replace(/&/g, '&amp;').replace(/</g, '&lt;'); }
+  function ser(e, d) {
+    if (d > 14) return '';
+    var tag = String(e.tagName || 'x').toLowerCase(), a = '';
+    if (DROP.test(tag)) return '';
+    for (var i = 0; i < KEEP.length; i++) {
+      var v = KEEP[i] === 'class' && typeof e.className === 'string' ? e.className : (e.getAttribute ? e.getAttribute(KEEP[i]) : null);
+      if (v) a += ' ' + KEEP[i] + '="' + String(v).slice(0, KEEP[i] === 'href' ? 300 : 120).replace(/"/g, '&quot;') + '"';
+    }
+    if ((e.children || []).length === 0 && /(?:\u20b9|Rs\.?)\s?\d/.test(e.textContent || '') && isStruck(e)) a += ' data-struck="1"';
+    var inside = '', nodes = e.childNodes && e.childNodes.length ? e.childNodes : (e.children || []);
+    if ((e.children || []).length === 0) inside = esc(txt(e));
+    else for (var j = 0; j < nodes.length; j++) { var n = nodes[j]; inside += n.nodeType === 3 ? esc(String(n.nodeValue || '').replace(/\s+/g, ' ')) : (n.tagName ? ser(n, d + 1) : ''); }
+    return '<' + tag + a + '>' + inside + '</' + tag + '>';
+  }
+  function clean(e, cap) { var h = ser(e, 0).replace(/\s+/g, ' '); return h.length > cap ? h.slice(0, cap) + '<!--TRUNCATED-->' : h; }
+  function pathOf(a) { return String(a.href || '').split('#')[0].split('?')[0]; }
+  var all = document.querySelectorAll('body *'), leaves = [];
+  for (var i = 0; i < all.length; i++) { var e = all[i]; if (e.children && e.children.length === 0 && priceRx.test(txt(e)) && !isStruck(e)) leaves.push(e); }
+  var seen = [], cards = [], out = { picked: 0, grid: 0, nolink: 0, dup: 0 }, dump = [], body = document.body;
+  for (var li = 0; li < leaves.length && cards.length < 24; li++) {
+    var p = leaves[li], got = null, why = 'nolink';
+    for (var up = 0; up < 14 && p.parentElement; up++) {
+      p = p.parentElement; if (p === body) break;
+      var ls = links(p), distinct = {}; ls.forEach(function (a) { distinct[pathOf(a)] = 1; });
+      var nd = Object.keys(distinct).length;
+      if (nd > 2) { why = 'grid'; break; }
+      if (nd >= 1 && inner(p).length > 30 && inner(p).length < 1500) { got = { p: p, ls: ls }; break; }
+    }
+    if (!got) { out[why]++; if (dump.length < 3) { var d = leaves[li], k = 0; while (k < 4 && d.parentElement && d.parentElement !== body) { d = d.parentElement; k++; } dump.push({ price: txt(leaves[li]).slice(0, 20), why: why, html: clean(d, 1500) }); } continue; }
+    if (seen.indexOf(got.p) >= 0) { out.dup++; continue; }
+    seen.push(got.p); out.picked++;
+    var lk = got.ls.filter(function (a) { return /\/dp\/[A-Z0-9]{10}/.test(a.href); })[0] || got.ls[0], t = inner(got.p);
+    cards.push({ link: String(lk.href).slice(0, 300), sponsored: /\/sspa\/click|sponsored/i.test(lk.href) || /sponsored/i.test(t), ad: /(^|\n)\s*AD\s*(\n|$)/.test(t), html: clean(got.p, 6000) });
+  }
+  return { url: String(location.href || ''), title: String(document.title || '').slice(0, 100), leaves: leaves.length, outcome: out, cards: cards, dump: cards.length ? [] : dump };
+}
+// One more read of a store that is still empty: a fresh page, long wait, cardRescue. Never throws. Returns a run (runner_core shape): ok with a snapshot the same parser reads, or no_cards with rescue data for the report.
+async function rescueRead(wt, store, query, o) {
+  o = o || {};
+  var t0 = Date.now(), res = await readPage(wt, store.url(query), cardRescue, { settleMs: o.settleMs == null ? 5000 : o.settleMs, args: [o.waitMs == null ? 1200 : o.waitMs] });
+  var base = { store: store.label, key: store.key, ms: Date.now() - t0, slow: true, retried: true, rescued: true };
+  if (!res || !res.ok || !res.result) return Object.assign(base, { state: 'error', error: String((res && res.error) || 'no answer').slice(0, 120), rescue: null });
+  var r = res.result, cards = Array.isArray(r.cards) ? r.cards : [];
+  if (!cards.length) return Object.assign(base, { state: 'no_cards', cards: 0, rescue: r });
+  var snap = { v: 1, kind: 'search', query: query, url: r.url, title: r.title, time: new Date().toISOString(), metas: [], ldJson: [], cards: cards, priceBoxes: [], struckBoxes: [], clickTexts: [], offerBoxes: [], pageOfferLines: [], pageAvailLines: [], probe: 'app-rescue-0.8.0' };
+  return Object.assign(base, { state: 'ok', cards: cards.length, snapshot: snap, rescue: { url: r.url, leaves: r.leaves, outcome: r.outcome, dump: [] } });
+}
+function rescueLines(label, run) {
+  var r = run && run.rescue;
+  if (!r) return [label + ' rescue: ' + (run && run.error ? 'could not read (' + String(run.error).slice(0, 80) + ')' : 'no answer')];
+  var o = r.outcome || {}, out = [label + ' rescue: ' + (run.state === 'ok' ? 'FOUND ' + run.cards + ' cards' : 'still 0 cards') + ' | price elements ' + (Number(r.leaves) || 0) + ' | card found ' + (o.picked || 0) + ', stopped at a grid ' + (o.grid || 0) + ', no link above ' + (o.nolink || 0) + ', same card again ' + (o.dup || 0) + (r.url ? ' | page ' + String(r.url).slice(0, 90) : '')];
+  (r.dump || []).forEach(function (d, i) { out.push('Cut html ' + (i + 1) + ' (' + d.price + ', ' + d.why + '): ' + String(d.html || '').slice(0, 1500)); });
+  return out;
+}
+
 var api = { createWebTabs: createWebTabs, detailOf: detailOf, enabledMap: enabledMap, lineText: lineText, diagLines: diagLines, OFF_TEXT: OFF_TEXT,
   sameSite: sameSite, failingLabels: failingLabels, enabledOnly: enabledOnly, mergeRuns: mergeRuns, pickProduct: pickProduct, pickFromView: pickFromView, rowsOf: rowsOf, readPage: readPage,
   offerProbe: offerProbe, structureProbe: structureProbe, offerLines: offerLines, structLines: structLines, buildReport: buildReport,
-  timedOutLabels: timedOutLabels, listingLines: listingLines, scrollPage: scrollPage, slowRead: slowRead, isTileLine: isTileLine };
+  timedOutLabels: timedOutLabels, listingLines: listingLines, scrollPage: scrollPage, slowRead: slowRead, isTileLine: isTileLine,
+  cardRescue: cardRescue, rescueRead: rescueRead, rescueLines: rescueLines };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

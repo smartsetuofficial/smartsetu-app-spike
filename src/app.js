@@ -4,7 +4,7 @@ import { InAppBrowser, InvisibilityMode } from '@capgo/capacitor-inappbrowser';
 var W = require('./webtabs.js');
 var C = require('./spike_core.js');
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, wt = null, diag = {}, struct = {}, retry = false, VERSION = '0.7.0', rep = { diag: [], struct: [], offers: [] };
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, wt = null, diag = {}, struct = {}, retry = false, VERSION = '0.8.0', rep = { diag: [], struct: [], offers: [], rescue: [] };
 function $(id) { return document.getElementById(id); }
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -117,7 +117,7 @@ async function readOffers(out, q, tabs, tabs2, view) {
 // S14-1e (test build): one text report of the whole run, copied only when the owner taps the button. Nothing is sent by the app.
 function showReport(q, out, view, err, t0) {
   var box = $('report'); if (!box) return;
-  var text = W.buildReport({ version: VERSION, query: q, seenAt: out && out.seenAt ? new Date(out.seenAt).toLocaleString() : '', totalS: Math.round((Date.now() - t0) / 1000), ua: (/Chrome\/[\d.]+/.exec(navigator.userAgent) || ['?'])[0], runs: out ? out.runs : [], rows: view ? W.rowsOf(view) : [], listings: W.listingLines(out ? out.runs : [], view ? W.rowsOf(view) : [], SmartSetu.parseSearch), diag: rep.diag, struct: rep.struct, offers: rep.offers, error: err });
+  var text = W.buildReport({ version: VERSION, query: q, seenAt: out && out.seenAt ? new Date(out.seenAt).toLocaleString() : '', totalS: Math.round((Date.now() - t0) / 1000), ua: (/Chrome\/[\d.]+/.exec(navigator.userAgent) || ['?'])[0], runs: out ? out.runs : [], rows: view ? W.rowsOf(view) : [], listings: W.listingLines(out ? out.runs : [], view ? W.rowsOf(view) : [], SmartSetu.parseSearch), diag: rep.diag, struct: rep.struct, rescue: rep.rescue, offers: rep.offers, error: err });
   $('reptext').value = text; $('repmsg').textContent = 'Tap Copy, then paste the whole report in the chat. Nothing is sent by the app.'; box.hidden = false;
 }
 function copyReport() {
@@ -135,7 +135,7 @@ async function onSubmit(ev) {
   if (!q) { say('Type what you want to buy, for example "boAt Airdopes 141".'); return; }
   say(''); setBusy(true); $('results').textContent = '';
   var tabs = null, tabs2 = null, out = null, view = null, err = null, t0 = Date.now();
-  rep = { diag: [], struct: [], offers: [] };
+  rep = { diag: [], struct: [], offers: [], rescue: [] };
   try {
     var kill = W.enabledMap();
     function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: updateProgress, maxTabs: 1, perStoreMs: 50000, retryTimeouts: false }; }
@@ -168,6 +168,16 @@ async function onSubmit(ev) {
         if (struct[still2[k2]]) continue;
         say('Reading page structure: ' + still2[k2] + '...');
         struct[still2[k2]] = await W.readPage(tabs2, storeOf(still2[k2]).url(q), W.structureProbe, { settleMs: 4000 });
+      }
+    }
+    var empty = W.failingLabels(out.runs); // S14-1g (D-089): a store that is still empty gets a card rescue read (every store, D-073)
+    if (empty.length) {
+      tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { probe: true }); wt = tabs2;
+      for (var em = 0; em < empty.length; em++) {
+        say('Card rescue for ' + empty[em] + '...');
+        var rr = await W.rescueRead(tabs2, storeOf(empty[em]), q, {});
+        W.rescueLines(empty[em], rr).forEach(function (l) { rep.rescue.push(l); });
+        if (rr.state === 'ok') { W.mergeRuns(out, { runs: [rr] }); updateProgress(rr); }
       }
     }
     var tl = V.timeLine(out); if (tl) { var pt = el('p', 'note', tl); pt.id = 'ptime'; $('progress').appendChild(pt); }

@@ -257,7 +257,7 @@ function pageUndef() { return undefined; }
   W.mergeRuns(outM, { runs: [sH] });
   ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
   var appH = read('src/app.js');
-  ok(/VERSION = '0\.7\.0'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /listings: W\.listingLines\(out \? out\.runs : \[\], view \? W\.rowsOf\(view\) : \[\], SmartSetu\.parseSearch\)/.test(appH) && /run\.slow \? '3rd try \(long wait\): '/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'H15 app wiring: slow third try, listings in report, 3rd-try label, still only 2 runAll calls');
+  ok(/VERSION = '0\.8\.0'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /listings: W\.listingLines\(out \? out\.runs : \[\], view \? W\.rowsOf\(view\) : \[\], SmartSetu\.parseSearch\)/.test(appH) && /run\.slow \? '3rd try \(long wait\): '/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'H15 app wiring: slow third try, listings in report, 3rd-try label, still only 2 runAll calls');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -286,12 +286,85 @@ function pageUndef() { return undefined; }
   ok(W.lineText({ state: 'no_cards', key: 'flipkart' }, 'No listings found on the page (page complete, hidden tab, 4 links, read 3 times)') === 'No listings found on the page (page complete, hidden page, 4 links, read 3 times)', 'C4 hidden tab becomes hidden page');
   ok(W.diagLines('Croma', null)[0] === 'Croma: no page data came back' && W.diagLines('Croma', { title: 'T', url: 'https://x/', items: 2, text: 'hi' }).length === 5 && W.diagLines('Croma', { error: 'x' }).length === 1, 'C5 diagnostic lines');
 
+  // J: S14-1g card rescue (page function + read + report), same function for every store (D-073)
+  function jn(tag, cls, kids, text, href) { var n = { tagName: tag.toUpperCase(), className: cls || '', children: kids || [], parentElement: null, _t: text || '', _h: href || null, nodeType: 1 }; n.children.forEach(function (c) { c.parentElement = n; }); return n; }
+  function jtx(n) { return n._t + n.children.map(jtx).join(' '); }
+  function jall(n, o) { o = o || []; n.children.forEach(function (c) { o.push(c); jall(c, o); }); return o; }
+  function jwire(n, host) {
+    Object.defineProperty(n, 'textContent', { get: function () { return jtx(n); } });
+    Object.defineProperty(n, 'innerText', { get: function () { return jtx(n); } });
+    if (n._h) n.href = 'https://' + host + n._h;
+    n.getAttribute = function (k) { return k === 'href' ? n._h : (k === 'class' ? n.className : null); };
+    n.querySelectorAll = function (sel) { return sel === 'a[href]' ? jall(n).filter(function (c) { return c.tagName === 'A' && c._h; }) : jall(n); };
+    n.children.forEach(function (c) { jwire(c, host); });
+    return n;
+  }
+  function jdeep(depth, leaf) { var n = leaf; for (var i = 0; i < depth; i++) n = jn('div', 'w' + i, [n]); return n; }
+  function jpage(host, root, href) {
+    jwire(root, host);
+    global.document = { body: root, title: 'Search', querySelectorAll: function () { return jall(root); } };
+    global.window = { scrollTo: function () {} }; global.location = { hostname: host, href: href || 'https://' + host + '/search?q=x' };
+    global.getComputedStyle = function (e) { return { textDecorationLine: e._struck ? 'line-through' : 'none' }; };
+  }
+  function jdone() { delete global.document; delete global.window; delete global.location; delete global.getComputedStyle; }
+  function jcard(title, href, price, mrp, depth) {
+    var pr = [jn('span', 'now', [], price)]; if (mrp) { var m = jn('span', 'was', [], mrp); m._struck = true; pr.push(m); }
+    return jn('div', 'card', [jn('a', 'lnk', [jn('span', 't', [], title)], '', href), jdeep(depth, jn('div', 'pr', pr))]);
+  }
+  var jr1 = jn('body', '', [jn('div', 'grid', [jcard('Apple iPhone 17 Pro (Silver, 256 GB)', '/apple-iphone-17-pro/p/itm111?pid=A', '\u20b91,12,900', '\u20b91,29,900', 9), jcard('Apple iPhone 17 Pro (Blue, 512 GB)', '/apple-iphone-17-pro/p/itm222?pid=B', '\u20b91,34,900', null, 9)])]);
+  jpage('www.flipkart.com', jr1);
+  var cr1 = await W.cardRescue(1); jdone();
+  ok(cr1.cards.length === 2 && cr1.outcome.picked === 2 && cr1.leaves === 2 && cr1.dump.length === 0, 'J1 rescue finds both deep cards (struck MRP not counted as a price element): ' + JSON.stringify(cr1.outcome));
+  ok(/itm111/.test(cr1.cards[0].link) && cr1.cards[0].sponsored === false && /data-struck="1"/.test(cr1.cards[0].html) && /Apple iPhone 17 Pro \(Silver, 256 GB\)/.test(cr1.cards[0].html) && cr1.cards[0].html.indexOf('<script') < 0, 'J2 card html keeps title, link and the struck marker');
+  var jps = SmartSetu.parseSearch({ v: 1, kind: 'search', query: 'iphone 17 pro', url: 'https://www.flipkart.com/search?q=x', cards: cr1.cards, probe: 'x' });
+  ok(jps.status === 'ok' && jps.cards.length === 2 && jps.cards[0].priceNow === 112900 && jps.cards[0].mrp === 129900 && jps.cards[0].title === 'Apple iPhone 17 Pro (Silver, 256 GB)' && jps.cards[1].priceNow === 134900, 'J3 the same parser reads the rescued cards (price, MRP, title): ' + JSON.stringify(jps.cards.map(function (c) { return [c.title, c.priceNow, c.mrp]; })));
+  var jr4 = jn('body', '', [jn('div', 'row', [jn('a', '', [jn('span', '', [], 'Phone one name here long')], '', '/a/p/itm1'), jn('span', '', [], '\u20b950,000'), jn('a', '', [jn('span', '', [], 'Phone two name here long')], '', '/b/p/itm2'), jn('a', '', [jn('span', '', [], 'Phone three name here')], '', '/c/p/itm3')])]);
+  jpage('www.flipkart.com', jr4); var cr4 = await W.cardRescue(1); jdone();
+  ok(cr4.cards.length === 0 && cr4.outcome.grid === 1 && cr4.dump.length === 1 && cr4.dump[0].why === 'grid' && /50,000/.test(cr4.dump[0].html), 'J4 a wrapper with 3 product links is not a card; its cut html goes into the dump');
+  var jr5 = jn('body', '', [jn('div', 'hd', [jn('span', '', [], 'Update pincode'), jn('span', 'p', [], '\u20b9999')])]);
+  jpage('www.croma.com', jr5); var cr5 = await W.cardRescue(1); jdone();
+  ok(cr5.cards.length === 0 && cr5.outcome.nolink === 1 && cr5.dump[0].why === 'nolink', 'J5 no link above a price -> no card, honest nolink count');
+  var jr6 = jn('body', '', [jn('div', 'c', [jn('a', '', [jn('span', '', [], 'Some long product name here again')], '', '/x/p/itm9'), jn('span', '', [], '\u20b95,000')])]);
+  jpage('www.flipkart.com', jr6); jall(jr6).forEach(function (n) { if (n.href) n.href = 'https://evil.example.com/x/p/itm9'; });
+  var cr6 = await W.cardRescue(1); jdone();
+  ok(cr6.cards.length === 0, 'J6 links to another host are not used');
+  jpage('www.nykaa.com', jn('body', '', [jn('div', '', [jcard('Nykaa Matte Lipstick Red Shade 3.7 g', '/nykaa-lipstick/p/123456', '\u20b9499', null, 3)])]));
+  var jctx = { document: global.document, window: global.window, location: global.location, getComputedStyle: global.getComputedStyle, URL: URL, setTimeout: setTimeout };
+  var cr7 = await vm.runInNewContext('(' + W.cardRescue.toString() + ')(1)', jctx); jdone();
+  ok(cr7.cards.length === 1 && cr7.cards[0].link === 'https://www.nykaa.com/nykaa-lipstick/p/123456', 'J7 cardRescue has no outside references (runs from its source text)');
+  function jwt(page, fail) { return { tabs: { create: async function () { return { id: 7 }; }, get: async function () { return { status: 'complete' }; }, remove: async function () {} }, scripting: { executeScript: async function (o) { if (fail) throw new Error('boom'); page(); var r = await o.func.apply(null, o.args); jdone(); return [{ result: r }]; } } }; }
+  var jstore = { label: 'Flipkart', key: 'flipkart', url: function (q) { return 'https://www.flipkart.com/search?q=' + encodeURIComponent(q); } };
+  var rr1 = await W.rescueRead(jwt(function () { jpage('www.flipkart.com', jn('body', '', [jn('div', '', [jcard('Apple iPhone 17 Pro (Silver, 256 GB)', '/apple-iphone-17-pro/p/itm111', '\u20b91,12,900', null, 9)])])); }), jstore, 'iphone 17 pro', { settleMs: 1, waitMs: 1 });
+  ok(rr1.state === 'ok' && rr1.cards === 1 && rr1.rescued === true && rr1.snapshot.kind === 'search' && rr1.snapshot.cards.length === 1 && rr1.store === 'Flipkart' && rr1.key === 'flipkart' && SmartSetu.parseSearch(rr1.snapshot).cards.length === 1, 'J8 rescueRead returns an ok run with a snapshot the parser reads');
+  var rr2 = await W.rescueRead(jwt(function () { jpage('www.flipkart.com', jn('body', '', [jn('div', '', [jn('span', '', [], 'hello')])])); }), jstore, 'x', { settleMs: 1, waitMs: 1 });
+  ok(rr2.state === 'no_cards' && rr2.cards === 0 && rr2.rescue && rr2.snapshot === undefined, 'J9 no card -> no_cards run, no snapshot');
+  var rr3 = await W.rescueRead(jwt(null, true), jstore, 'x', { settleMs: 1, waitMs: 1 });
+  ok(rr3.state === 'error' && /boom/.test(rr3.error) && W.rescueLines('Flipkart', rr3)[0].indexOf('could not read') > 0, 'J10 a failing read gives an error run and a report line, never throws');
+  var rl = W.rescueLines('Flipkart', { state: 'no_cards', rescue: { url: 'https://www.flipkart.com/search?q=x', leaves: 59, outcome: { picked: 0, grid: 40, nolink: 19, dup: 0 }, dump: [{ price: '\u20b91,12,900', why: 'grid', html: '<div class="a">x</div>' }] } });
+  ok(rl.length === 2 && /still 0 cards/.test(rl[0]) && /price elements 59/.test(rl[0]) && /grid 40/.test(rl[0]) && /^Cut html 1 /.test(rl[1]), 'J11 rescue report lines show counts and the cut html');
+  var jrep = W.buildReport({ version: 'v', rescue: ['Flipkart rescue: x'] });
+  ok(/CARD RESCUE \(S14-1g\)/.test(jrep) && /Flipkart rescue: x/.test(jrep), 'J12 report has a CARD RESCUE section');
+  ok(/W\.rescueRead\(tabs2, storeOf\(empty\[em\]\), q, \{\}\)/.test(appH) && /var empty = W\.failingLabels\(out\.runs\)/.test(appH) && /rescue: rep\.rescue/.test(appH) && /rr\.state === 'ok'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'J13 app wiring: rescue only for stores still empty, an ok run replaces the empty one, report carries it, still 2 runAll');
+  var rescSrc = W.cardRescue.toString();
+  ok(rescSrc.indexOf('fetch(') < 0 && rescSrc.indexOf('XMLHttpRequest') < 0 && rescSrc.indexOf('localStorage') < 0 && rescSrc.indexOf('document.cookie') < 0 && rescSrc.indexOf('eval(') < 0, 'J14 page function reads only: no network, storage, cookie, eval');
+
+  // J15-J17: limits of the climb (14 levels, 1500 characters) and the same card reached from two price elements
+  jpage('www.flipkart.com', jn('body', '', [jn('div', '', [jcard('Far away card name long enough', '/far/p/itm5', '\u20b97,000', null, 16)])]));
+  var cr15 = await W.cardRescue(1); jdone();
+  ok(cr15.cards.length === 0 && cr15.outcome.nolink === 1, 'J15 the climb stops after 14 levels');
+  jpage('www.flipkart.com', jn('body', '', [jn('div', '', [jn('a', '', [jn('span', '', [], 'Long text product name here')], '', '/long/p/itm6'), jn('p', '', [], new Array(400).join('word ')), jn('span', '', [], '\u20b98,000')])]));
+  var cr16 = await W.cardRescue(1); jdone();
+  ok(cr16.cards.length === 0, 'J16 a block with more than 1500 characters of text is not taken as one card');
+  jpage('www.flipkart.com', jn('body', '', [jn('div', '', [jn('a', '', [jn('span', '', [], 'Two prices one card name')], '', '/two/p/itm7'), jn('span', '', [], '\u20b99,000'), jn('span', '', [], '\u20b98,500')])]));
+  var cr17 = await W.cardRescue(1); jdone();
+  ok(cr17.cards.length === 1 && cr17.outcome.picked === 1 && cr17.outcome.dup === 1, 'J17 two price elements of one card give one card');
+
   // D: shipped files
   var ext = path.join(__dirname, '..', 'extension'), www = path.join(__dirname, 'www');
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.7.0' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
+  ok(pkg.version === '0.8.0' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 2 && appjs.indexOf('.runAll(') > appjs.indexOf('async function onSubmit') && /addEventListener\('submit', onSubmit\)/.test(appjs), 'D5 runAll only inside the Compare submit handler (D-010)');
