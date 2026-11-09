@@ -31,9 +31,9 @@ function mockPlugin(opt) {
       return Promise.resolve(id);
     },
     exec: function (o) {
-      st.execs++;
+      st.execs++; st.lastCode = o.code;
       if (opt.noBridge) return Promise.resolve();
-      var sb = { location: { href: urls[o.id] || '' }, FX: fxSnap, console: console, JSON: JSON, Promise: Promise, setTimeout: setTimeout, String: String };
+      var sb = { location: { href: urls[o.id] || '' }, document: { title: 'Access denied', body: { innerText: 'Please   verify\n you are human' }, querySelectorAll: function () { return [1, 2, 3]; } }, FX: fxSnap, console: console, JSON: JSON, Promise: Promise, setTimeout: setTimeout, String: String };
       sb.window = { mobileApp: { postMessage: function (m) { if (opt.dropExec && m.detail && m.detail.kind === 'exec') return; setTimeout(function () { st.msgFns.forEach(function (f) { f(opt.rawStyle ? { rawMessage: JSON.stringify(m) } : m); }); }, 1); } } };
       sb.window.location = sb.location;
       try { vm.runInNewContext(o.code, sb, { timeout: 2000 }); } catch (e) { return Promise.reject(e); }
@@ -103,6 +103,20 @@ function pageUndef() { return undefined; }
   var e9 = null; try { await w4.scripting.executeScript({ target: { tabId: t4.id }, func: 'alert(1)', args: [] }); } catch (e) { e9 = e; }
   ok(e9 && /func missing/.test(e9.message), 'A9 a string is not accepted as func');
 
+  // A10 probe (test-build diagnostic): only when asked, cleared on the next page, also after a page error
+  var p10 = mockPlugin(), w10 = W.createWebTabs(p10.api, { probe: true }), t10 = await w10.tabs.create({ url: 'https://www.flipkart.com/search?q=x' });
+  await w10.scripting.executeScript({ target: { tabId: t10.id }, func: pageOk, args: ['q', 1] });
+  var pr10 = w10.lastProbe();
+  ok(pr10 && pr10.d.title === 'Access denied' && pr10.d.text === 'Please verify you are human' && pr10.d.items === 3 && /flipkart/.test(pr10.d.url), 'A10 probe gives title, url, short text, price-like count');
+  await w10.tabs.create({ url: 'https://www.nykaa.com/' });
+  ok(w10.lastProbe() === null, 'A10 probe is cleared when the next page opens');
+  var t10c = await w10.tabs.create({ url: 'https://www.croma.com/' });
+  try { await w10.scripting.executeScript({ target: { tabId: t10c.id }, func: pageThrow, args: [] }); } catch (_) {}
+  ok(w10.lastProbe() && w10.lastProbe().d.title === 'Access denied', 'A10 probe also comes back after a page error');
+  var p10b = mockPlugin(), w10b = W.createWebTabs(p10b.api), t10b = await w10b.tabs.create({ url: 'https://a.test/' });
+  await w10b.scripting.executeScript({ target: { tabId: t10b.id }, func: pageOk, args: ['q', 1] });
+  ok(w10b.lastProbe() === null && !/probeNow/.test(String(p10b.lastCode || '')), 'A10 no probe unless asked');
+
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
     var pb = mockPlugin(), wb = W.createWebTabs(pb.api), seen = [];
@@ -127,12 +141,15 @@ function pageUndef() { return undefined; }
   ok(/^Could not open \(no answer from the page/.test(W.lineText({ state: 'error', key: 'amazon', error: 'no answer from the page (bridge missing)' }, 'Could not open')) && W.lineText({ state: 'ok', key: 'amazon' }, 'Read 5 listings') === 'Read 5 listings', 'C2 error line gets the short reason, ok line is unchanged');
   ok(W.lineText({ state: 'error', key: 'a', error: new Array(300).join('x') }, 'T').length <= 100, 'C2 error reason is cut short');
   ok(JSON.stringify(W.enabledMap()) === '{"Myntra":false}', 'C3 only Myntra is off');
+  ok(W.lineText({ state: 'no_cards', key: 'flipkart' }, 'No listings found on the page (page complete, hidden tab, 4 links, read 3 times)') === 'No listings found on the page (page complete, hidden page, 4 links, read 3 times)', 'C4 hidden tab becomes hidden page');
+  ok(W.diagLines('Croma', null)[0] === 'Croma: no page data came back' && W.diagLines('Croma', { title: 'T', url: 'https://x/', items: 2, text: 'hi' }).length === 5 && W.diagLines('Croma', { error: 'x' }).length === 1, 'C5 diagnostic lines');
 
   // D: shipped files
   var ext = path.join(__dirname, '..', 'extension'), www = path.join(__dirname, 'www');
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
+  ok(pkg.version === '0.3.0' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 1 && appjs.indexOf('.runAll(') > appjs.indexOf('async function onSubmit') && /addEventListener\('submit', onSubmit\)/.test(appjs), 'D5 runAll only inside the Compare submit handler (D-010)');

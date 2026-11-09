@@ -14,20 +14,30 @@ var OFF_TEXT = { myntra: 'No data on the phone app yet' };
 function enabledMap() { return { Myntra: false }; }
 // view.js gives the store line text; the app adds the plain reason for a store that is off and the short error for a store that failed.
 function lineText(run, text) {
+  text = String(text).replace(/(hidden|visible) tab/g, '$1 page'); // view.js says tab, the app has pages
   if (run && run.state === 'off' && OFF_TEXT[run.key]) return OFF_TEXT[run.key];
   if (run && run.state === 'error' && run.error) return text + ' (' + String(run.error).replace(/\s+/g, ' ').slice(0, 90) + ')';
   return text;
 }
 
+// Test-build diagnostic (D-082): what the page itself shows for a store that gave no listings. Shown only on the owner's screen, never stored or sent. Remove before the release APK.
+var PROBE_SRC = 'function probeNow() { try { var t = String((document.body && document.body.innerText) || "").replace(/\\s+/g, " ").trim().slice(0, 200); return { title: String(document.title || "").slice(0, 100), url: String(location.href).slice(0, 200), text: t, items: document.querySelectorAll(\'[class*="rice"]\').length }; } catch (e) { return { error: String((e && e.message) || e) }; } }\n';
+function diagLines(label, d) {
+  if (!d) return [label + ': no page data came back'];
+  if (d.error) return [label + ': ' + String(d.error).slice(0, 100)];
+  return [label, 'Title: ' + (d.title || '(none)'), 'Page: ' + (d.url || '(none)'), 'Price-like items: ' + (Number(d.items) || 0), 'Text: ' + (d.text || '(none)')];
+}
+
 function createWebTabs(plugin, o) {
   o = o || {};
   var execMs = o.execMs == null ? 45000 : o.execMs;
-  var listeners = [], pending = {}, loaded = {}, current = null, opening = false, earlyLoad = false, seq = 0, unsubs = [], inited = null;
+  var listeners = [], pending = {}, loaded = {}, current = null, opening = false, earlyLoad = false, seq = 0, unsubs = [], inited = null, probe = o.probe === true, lastProbe = null;
 
   function onMsg(ev) {
     var d = detailOf(ev); if (!d || !d.cid) return;
     var p = pending[d.cid]; if (!p) return;
     if (d.kind === 'exec_ack') { p.acked = true; return; }
+    if (d.kind === 'probe') { lastProbe = { tabId: p.tabId, d: d.d }; return; }
     if (d.kind !== 'exec') return;
     delete pending[d.cid]; clearTimeout(p.timer);
     if (d.ok) p.resolve([{ result: d.result }]); else p.reject(new Error(d.error || 'page script failed'));
@@ -49,7 +59,7 @@ function createWebTabs(plugin, o) {
   var tabs = {
     create: function (spec) {
       return init().then(function () {
-        opening = true; earlyLoad = false;
+        opening = true; earlyLoad = false; lastProbe = null;
         return Promise.resolve(plugin.open({ url: spec.url, visible: !!spec.active })).then(function (id) {
           current = id; loaded[id] = earlyLoad; opening = false;
           return { id: id, status: earlyLoad ? 'complete' : 'loading' };
@@ -77,11 +87,14 @@ function createWebTabs(plugin, o) {
       var code = '(async function () {\n' +
         'var C = ' + JSON.stringify(cid) + ';\n' +
         'function send(o) { try { window.mobileApp.postMessage({ detail: o }); } catch (e) {} }\n' +
+        (probe ? PROBE_SRC : '') +
         'send({ kind: "exec_ack", cid: C });\n' +
         'try {\n' +
         '  var r = await (' + func.toString() + ').apply(null, ' + JSON.stringify(args) + ');\n' +
+        (probe ? '  send({ kind: "probe", cid: C, d: probeNow() });\n' : '') +
         '  send({ kind: "exec", cid: C, ok: true, result: r === undefined ? null : r });\n' +
         '} catch (e) {\n' +
+        (probe ? '  send({ kind: "probe", cid: C, d: probeNow() });\n' : '') +
         '  send({ kind: "exec", cid: C, ok: false, error: String((e && e.message) || e) });\n' +
         '}\n})();\n';
       return init().then(function () {
@@ -105,8 +118,8 @@ function createWebTabs(plugin, o) {
     unsubs.forEach(function (u) { try { if (typeof u === 'function') u(); } catch (_) {} });
     unsubs = []; inited = null; listeners = [];
   }
-  return { tabs: tabs, scripting: scripting, dispose: dispose };
+  return { tabs: tabs, scripting: scripting, dispose: dispose, lastProbe: function () { return lastProbe; } };
 }
 
-var api = { createWebTabs: createWebTabs, detailOf: detailOf, enabledMap: enabledMap, lineText: lineText, OFF_TEXT: OFF_TEXT };
+var api = { createWebTabs: createWebTabs, detailOf: detailOf, enabledMap: enabledMap, lineText: lineText, diagLines: diagLines, OFF_TEXT: OFF_TEXT };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
