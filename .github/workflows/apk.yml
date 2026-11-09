@@ -23,9 +23,19 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+      - name: Raise Gradle wrapper download timeout
+        run: |
+          sed -i 's/^networkTimeout=10000$/networkTimeout=120000/' android/gradle/wrapper/gradle-wrapper.properties
+          grep -x 'networkTimeout=120000' android/gradle/wrapper/gradle-wrapper.properties
       - name: Build debug APK
         working-directory: android
-        run: ./gradlew assembleDebug --no-daemon
+        run: |
+          for i in 1 2 3; do
+            ./gradlew assembleDebug --no-daemon && exit 0
+            echo "Gradle attempt $i failed, retrying in 20 s"
+            sleep 20
+          done
+          exit 1
       - uses: actions/upload-artifact@v4
         with:
           name: smartsetu-debug-apk
