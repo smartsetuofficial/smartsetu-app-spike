@@ -4,7 +4,7 @@ import { InAppBrowser, InvisibilityMode } from '@capgo/capacitor-inappbrowser';
 var W = require('./webtabs.js');
 var C = require('./spike_core.js');
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, wt = null, diag = {}, struct = {}, retry = false, VERSION = '0.8.2', rep = { diag: [], struct: [], offers: [], rescue: [] };
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, wt = null, diag = {}, struct = {}, retry = false, VERSION = '0.8.3', rep = { diag: [], struct: [], offers: [], rescue: [] };
 function $(id) { return document.getElementById(id); }
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
