@@ -446,6 +446,8 @@ function pageUndef() { return undefined; }
   var ryml = read('.github/workflows/release-apk.yml'), dyml = read('.github/workflows/apk.yml');
   function stepOrder(y) { var a = y.indexOf('cap sync android'), b = y.indexOf('name: Apply SmartSetu icon and splash'), c = y.indexOf('cp -R resources/android/res/. android/app/src/main/res/'), d = y.indexOf('./gradlew assemble'); return a > 0 && b > a && c > b && d > c; }
   ok(stepOrder(ryml) && stepOrder(dyml), 'U18 both workflows copy the icon and splash files after cap sync and before Gradle');
+  ok(/^\/android\/$/m.test(gi) && !/^android\/$/m.test(gi), 'U19 .gitignore ignores only the generated root android/ folder, so resources/android is tracked (D-095 fix)');
+  if (fs.existsSync(path.join(__dirname, '.git'))) { var gci = require('child_process').spawnSync('git', ['check-ignore', '-q', 'resources/android/res/mipmap-mdpi/ic_launcher_foreground.png'], { cwd: __dirname }); if (!gci.error) ok(gci.status === 1, 'U20 git does not ignore the icon files under resources/android'); }
   console.log('test_app: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
 })();
