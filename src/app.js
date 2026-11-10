@@ -4,7 +4,7 @@ import { InAppBrowser, InvisibilityMode } from '@capgo/capacitor-inappbrowser';
 var W = require('./webtabs.js');
 var C = require('./spike_core.js');
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, wt = null, diag = {}, struct = {}, retry = false, VERSION = '0.8.1', rep = { diag: [], struct: [], offers: [], rescue: [] };
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, wt = null, diag = {}, struct = {}, retry = false, VERSION = '0.8.2', rep = { diag: [], struct: [], offers: [], rescue: [] };
 function $(id) { return document.getElementById(id); }
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -111,6 +111,7 @@ async function readOffers(out, q, tabs, tabs2, view) {
       lines = W.offerLines(r.store, pick.url, rd);
     }
     lines.forEach(function (l) { rep.offers.push(l); box.appendChild(el('p', 'note', l)); });
+    rep.offers.push('--- end of ' + r.store + ' block (' + lines.length + ' lines) ---'); // S14-1i: every line between two markers belongs to that store's own read
   }
 }
 

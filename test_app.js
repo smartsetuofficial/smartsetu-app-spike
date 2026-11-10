@@ -257,7 +257,7 @@ function pageUndef() { return undefined; }
   W.mergeRuns(outM, { runs: [sH] });
   ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
   var appH = read('src/app.js');
-  ok(/VERSION = '0\.8\.1'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /listings: W\.listingLines\(out \? out\.runs : \[\], view \? W\.rowsOf\(view\) : \[\], SmartSetu\.parseSearch\)/.test(appH) && /run\.slow \? '3rd try \(long wait\): '/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'H15 app wiring: slow third try, listings in report, 3rd-try label, still only 2 runAll calls');
+  ok(/VERSION = '0\.8\.2'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /listings: W\.listingLines\(out \? out\.runs : \[\], view \? W\.rowsOf\(view\) : \[\], SmartSetu\.parseSearch\)/.test(appH) && /run\.slow \? '3rd try \(long wait\): '/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'H15 app wiring: slow third try, listings in report, 3rd-try label, still only 2 runAll calls');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -365,12 +365,30 @@ function pageUndef() { return undefined; }
   ok(W.lineText({ state: 'ok', key: 'croma' }, 'Read 5 listings') === 'Read 5 listings', 'K3 Croma with listings has no note');
   ok(W.lineText({ state: 'error', key: 'croma', error: 'boom' }, 'Could not open') === 'Could not open (boom)', 'K4 Croma error keeps the error text');
 
+  // L: S14-1i the report shows the cut html of listings that have no price (every store), and every offers block is closed by a marker
+  var lraw = function (id, extra) { return { link: 'https://www.amazon.in/dp/' + id, html: '<div class="s-card"><a href="/dp/' + id + '"><span>Apple iPhone 17 Pro 256 GB test listing</span></a>' + (extra || '') + '</div>' }; };
+  var lstub = function (cards) { return function () { return { cards: cards, skipped: {} }; }; };
+  var lc = function (id, price) { return { url: 'https://www.amazon.in/dp/' + id + '?ref=1', title: 'Apple iPhone 17 Pro 256 GB', priceNow: price, titleSource: 'card' }; };
+  var l1 = W.listingLines([{ store: 'Amazon', snapshot: { cards: [lraw('B0AAAAAAA1'), lraw('B0AAAAAAA2'), lraw('B0AAAAAAA3'), lraw('B0AAAAAAA4')] } }], [], lstub([lc('B0AAAAAAA1', null), lc('B0AAAAAAA2', 99900), lc('B0AAAAAAA3', null), lc('B0AAAAAAA4', null)]));
+  var lh1 = l1.filter(function (x) { return /^- no-price card html/.test(x); });
+  ok(lh1.length === 2 && /^- no-price card html 1 \| Apple iPhone 17 Pro 256 GB \| <div class="s-card"><a href="\/dp\/B0AAAAAAA1">/.test(lh1[0]) && /html 2 .*B0AAAAAAA3/.test(lh1[1]), 'L1 first 2 price-less listings get their cut html, a priced one gets none');
+  var l2 = W.listingLines([{ store: 'Ajio', snapshot: { cards: [lraw('B0BBBBBBB1')] } }], [], lstub([lc('B0ZZZZZZZZ', null)]));
+  ok(l2.some(function (x) { return /no-price card html 1 .*\(raw card not found for this listing\)/.test(x); }), 'L2 a price-less listing without a raw card says so, no invented html');
+  var l3 = W.listingLines([{ store: 'Amazon', snapshot: { cards: [lraw('B0CCCCCCC1', new Array(300).join('word '))] } }], [], lstub([lc('B0CCCCCCC1', null)]));
+  ok(l3.filter(function (x) { return /no-price card html/.test(x); })[0].length < 1400, 'L3 the html is cut to 1200 characters');
+  var l4 = W.listingLines([{ store: 'Amazon', snapshot: { cards: [{ link: 'https://www.amazon.in/dp/B0DDDDDDD1', html: '<div>Price \u20b999,900</div>' }] } }], [], lstub([lc('B0DDDDDDD1', 99900)]));
+  ok(!l4.some(function (x) { return /no-price card html/.test(x); }), 'L4 priced listings add no html lines');
+  var lreal = global.SmartSetu.parseSearch({ v: 1, kind: 'search', query: 'iphone', url: 'https://www.amazon.in/s?k=iphone', probe: 'x', cards: [{ link: 'https://www.amazon.in/dp/B0EEEEEEE1', sponsored: false, ad: false, html: '<div class="s-card"><a href="https://www.amazon.in/dp/B0EEEEEEE1"><h2>Apple iPhone 17 Pro 256 GB: 15.93 cm Display</h2></a></div>' }] });
+  var l5 = W.listingLines([{ store: 'Amazon', snapshot: { cards: [{ link: 'https://www.amazon.in/dp/B0EEEEEEE1', sponsored: false, ad: false, html: '<div class="s-card"><a href="https://www.amazon.in/dp/B0EEEEEEE1"><h2>Apple iPhone 17 Pro 256 GB: 15.93 cm Display</h2></a></div>' }], v: 1, kind: 'search', query: 'iphone', url: 'https://www.amazon.in/s?k=iphone', probe: 'x' } }], [], global.SmartSetu.parseSearch);
+  ok(lreal.cards.length === 1 && lreal.cards[0].priceNow == null && l5.some(function (x) { return /^- no-price card html 1 \| .*<h2>Apple iPhone 17 Pro 256 GB/.test(x); }), 'L5 with the real parser: a card without a price prints its own html');
+  ok(/rep\.offers\.push\('--- end of ' \+ r\.store \+ ' block \(' \+ lines\.length \+ ' lines\) ---'\)/.test(appH), 'L6 each offers block ends with a marker line');
+
   // D: shipped files
   var ext = path.join(__dirname, '..', 'extension'), www = path.join(__dirname, 'www');
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.8.1' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
+  ok(pkg.version === '0.8.2' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 2 && appjs.indexOf('.runAll(') > appjs.indexOf('async function onSubmit') && /addEventListener\('submit', onSubmit\)/.test(appjs), 'D5 runAll only inside the Compare submit handler (D-010)');

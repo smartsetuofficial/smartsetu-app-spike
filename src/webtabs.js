@@ -356,6 +356,12 @@ function listingLines(runs, rows, parse) {
     (p.cards || []).slice(0, 30).forEach(function (c) {
       out.push('- ' + (inRes[normUrl(c.url)] ? 'in result' : 'not in result') + ' | ' + (c.priceNow == null ? 'no price' : money(c.priceNow)) + ' | ' + (c.titleSource || '?') + ' | ' + String(c.title || '(no title)').slice(0, 90));
     });
+    var np = 0; // S14-1i (D-091): the cut html of the first 2 parsed listings without a price, every store, so the real card shape is visible
+    (p.cards || []).forEach(function (c) {
+      if (np >= 2 || c.priceNow != null) return;
+      var raw = cards.filter(function (x) { return x && normUrl(x.link) === normUrl(c.url); })[0]; np++;
+      out.push('- no-price card html ' + np + ' | ' + String(c.title || '(no title)').slice(0, 60) + ' | ' + (raw ? String(raw.html || '').replace(/\s+/g, ' ').slice(0, 1200) : '(raw card not found for this listing)'));
+    });
     var n = 0;
     cards.forEach(function (c) { if (n >= 5 || !c || !(c.sponsored || c.ad)) return; n++; out.push('- skipped ad | ' + plainText(c.html).slice(0, 90)); });
   });
