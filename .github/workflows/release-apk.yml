@@ -33,6 +33,12 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+      - name: Apply SmartSetu icon and splash
+        run: |
+          test -d resources/android/res
+          cp -R resources/android/res/. android/app/src/main/res/
+          test -f android/app/src/main/res/mipmap-xxxhdpi/ic_launcher_foreground.png
+          test -f android/app/src/main/res/drawable-port-xxhdpi/splash.png
       - name: Raise Gradle wrapper download timeout
         run: |
           sed -i 's/^networkTimeout=10000$/networkTimeout=120000/' android/gradle/wrapper/gradle-wrapper.properties

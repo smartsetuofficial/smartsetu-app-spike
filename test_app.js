@@ -257,7 +257,7 @@ function pageUndef() { return undefined; }
   W.mergeRuns(outM, { runs: [sH] });
   ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
   var appH = read('src/app.js');
-  ok(/VERSION = '0\.9\.0'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /run\.slow \? '3rd try \(long wait\): '/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'H15 app wiring: slow third try, 3rd-try label, still only 2 runAll calls');
+  ok(/VERSION = '0\.9\.1'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /run\.slow \? '3rd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'H15 app wiring: slow third try, 3rd-try label, still only 2 runAll calls');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -388,7 +388,7 @@ function pageUndef() { return undefined; }
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.9.0' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.9.0, no diagnostic or report wired');
+  ok(pkg.version === '0.9.1' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.9.1, no diagnostic or report wired');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 2 && appjs.indexOf('.runAll(') > appjs.indexOf('async function onSubmit') && /addEventListener\('submit', onSubmit\)/.test(appjs), 'D5 runAll only inside the Compare submit handler (D-010)');
@@ -410,6 +410,42 @@ function pageUndef() { return undefined; }
   var gi = read('.gitignore');
   ok(/\*\.pfx/.test(gi) && /\*\.jks/.test(gi) && /\*\.keystore/.test(gi) && /\*\.p12/.test(gi), 'D14d .gitignore keeps key files out of git');
   ok(fs.existsSync(path.join(__dirname, '.gitignore')) && /www\/app\.js/.test(read('.gitignore')), 'D10 built www/app.js stays out of git');
+
+  // U: S14-4 app look (D-095). Pure helpers, shipped css and html, icon and splash files, workflow step.
+  var U = require('./src/uihelp.js'), Wt = require('./src/webtabs.js');
+  ok(U.shortLine({ state: 'ok', key: 'amazon' }, 'Read 24 listings in 10 s (read again 2 times)').text === 'Read 24 listings in 10 s' && U.shortLine({ state: 'ok' }, 'Read 24 listings in 10 s').kind === 'ok', 'U1 ok line loses the technical bracket, kind ok');
+  var uc = U.shortLine({ state: 'no_cards', key: 'croma' }, "No listings found on the page (page complete, hidden page, 11 links, read 3 times). Croma's page asks for a pincode, so no products were shown.");
+  ok(uc.kind === 'skip' && uc.text === 'Skipped: asks for a pincode' && !/links|hidden page|read 3 times/.test(uc.text), 'U2 Croma pincode line is short and plain');
+  ok(Object.keys(U.SKIP_TEXT).every(function (k) { return Wt.NOCARDS_NOTE[k]; }), 'U3 every short skip text has its webtabs note (same store keys)');
+  ok(U.shortLine({ state: 'no_cards', key: 'ajio' }, 'x').text === 'No listings found' && U.shortLine({ state: 'timeout' }, 'Took too long (stuck while loading, 50 s)').text === 'Took too long' && U.shortLine({ state: 'error' }, 'Could not open the page (net::ERR)').kind === 'bad' && U.shortLine({ state: 'no_data' }, 'x').text === 'No readable data', 'U4 other failures: one short plain line each, no error codes');
+  ok(U.shortLine({ state: 'off', key: 'myntra' }, 'No data on the phone app yet').text === 'No data on the phone app yet' && U.shortLine({ state: 'off' }, 'Switched off').kind === 'off' && U.shortLine({ state: 'retrying' }, 'x').text === 'Trying once more...', 'U5 off and retrying lines');
+  ok(U.doneCount({ A: 'ok', B: 'off', C: 'retrying', D: 'timeout', E: undefined }) === 3 && U.doneCount({}) === 0, 'U6 progress counts only finished stores (retrying and waiting do not count)');
+  var gA = { comparable: true, note: 'N1', rows: [1, 2] }, gB = { comparable: true, note: 'N1', rows: [1, 2] }, gC = { comparable: false, note: 'N2', rows: [1] }, gD = { comparable: false, note: 'N2', rows: [1] };
+  var sg = U.splitGroups([gA, gC, gB, gD], 'specific');
+  ok(sg.multi.length === 2 && sg.single.length === 2 && sg.multiNote === 'N1' && sg.singleNote === 'N2', 'U7 compared listings first with one shared note, one-store listings folded with one shared note');
+  var sg1 = U.splitGroups([gA, gC], 'specific');
+  ok(sg1.multi.length === 1 && sg1.multiNote === '' && sg1.single.length === 1 && sg1.singleNote === '', 'U8 one compared listing keeps its own note, nothing shared');
+  var sg2 = U.splitGroups([gC, gD], 'specific'), sg3 = U.splitGroups([gA, gC], 'similar');
+  ok(sg2.multi.length === 2 && sg2.single.length === 0 && sg3.multi.length === 2 && sg3.single.length === 0, 'U9 nothing is hidden when no listing was compared, or for similar-products results');
+  ok(U.splitGroups(null, 'specific').multi.length === 0 && U.splitGroups([gA, { comparable: true, note: 'N9', rows: [1, 2] }], 'specific').multiNote === '', 'U10 empty input is safe, different notes are not merged');
+  var css = read('www/app.css'), cmpCss = read('www/compare.css');
+  ok(html.indexOf('href="compare.css"') >= 0 && html.indexOf('href="app.css"') > html.indexOf('href="compare.css"') && html.indexOf('name="theme-color"') > 0 && /id="pbar"[^>]*role="progressbar"/.test(html) && html.indexOf('id="pcount"') > 0 && html.indexOf('id="pfill"') > 0, 'U11 index.html loads app.css after compare.css, has the progress bar and theme colour');
+  ok(!/https?:\/\//.test(css) && !/https?:\/\/(?!www\.w3\.org)/.test(html) && !/@import|url\(/.test(css), 'U12 app.css and index.html call no other host (no remote font, image or script)');
+  ok(/prefers-reduced-motion/.test(css) && cmpCss.indexOf('.ic') < 0, 'U13 reduced motion respected, shared compare.css left alone');
+  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.9\.1'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
+  function pngSize(f) { var b = fs.readFileSync(f); return b.slice(0, 8).toString('hex') === '89504e470d0a1a0a' ? [b.readUInt32BE(16), b.readUInt32BE(20)] : null; }
+  var resDir = path.join(__dirname, 'resources', 'android', 'res'), fgS = { mdpi: 108, hdpi: 162, xhdpi: 216, xxhdpi: 324, xxxhdpi: 432 }, lgS = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
+  var iconsOk = Object.keys(fgS).every(function (d) {
+    var f = pngSize(path.join(resDir, 'mipmap-' + d, 'ic_launcher_foreground.png')), l = pngSize(path.join(resDir, 'mipmap-' + d, 'ic_launcher.png')), r = pngSize(path.join(resDir, 'mipmap-' + d, 'ic_launcher_round.png'));
+    return f && l && r && f[0] === fgS[d] && f[1] === fgS[d] && l[0] === lgS[d] && l[1] === lgS[d] && r[0] === lgS[d] && r[1] === lgS[d];
+  });
+  ok(iconsOk, 'U15 launcher icons: 15 PNG files, right pixel size for every density');
+  var spDirs = ['drawable', 'drawable-port-mdpi', 'drawable-port-hdpi', 'drawable-port-xhdpi', 'drawable-port-xxhdpi', 'drawable-port-xxxhdpi', 'drawable-land-mdpi', 'drawable-land-hdpi', 'drawable-land-xhdpi', 'drawable-land-xxhdpi', 'drawable-land-xxxhdpi'];
+  ok(spDirs.every(function (d) { var z = pngSize(path.join(resDir, d, 'splash.png')); return z && z[0] > 0 && z[1] > 0; }) && pngSize(path.join(resDir, 'drawable-port-xhdpi', 'splash.png')).join('x') === '720x1280' && pngSize(path.join(resDir, 'drawable-land-xhdpi', 'splash.png')).join('x') === '1280x720', 'U16 splash: 11 PNG files, same sizes as the Capacitor template');
+  ok(/#0F766E/.test(read('resources/android/res/values/ic_launcher_background.xml')) && /name="ic_launcher_background"/.test(read('resources/android/res/values/ic_launcher_background.xml')), 'U17 adaptive icon background colour is the brand teal');
+  var ryml = read('.github/workflows/release-apk.yml'), dyml = read('.github/workflows/apk.yml');
+  function stepOrder(y) { var a = y.indexOf('cap sync android'), b = y.indexOf('name: Apply SmartSetu icon and splash'), c = y.indexOf('cp -R resources/android/res/. android/app/src/main/res/'), d = y.indexOf('./gradlew assemble'); return a > 0 && b > a && c > b && d > c; }
+  ok(stepOrder(ryml) && stepOrder(dyml), 'U18 both workflows copy the icon and splash files after cap sync and before Gradle');
   console.log('test_app: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
 })();

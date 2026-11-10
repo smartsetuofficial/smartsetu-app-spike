@@ -3,8 +3,9 @@
 import { InAppBrowser, InvisibilityMode } from '@capgo/capacitor-inappbrowser';
 var W = require('./webtabs.js');
 var C = require('./spike_core.js');
+var U = require('./uihelp.js');
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, retry = false, VERSION = '0.9.0';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, maxDone = 0, retry = false, VERSION = '0.9.1';
 function $(id) { return document.getElementById(id); }
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -26,20 +27,34 @@ function pluginApi(ua) {
 function say(t) { $('msg').textContent = t || ''; }
 function setBusy(b) { busy = b; $('go').disabled = b; $('go').textContent = b ? 'Comparing...' : 'Compare'; }
 
+function refreshBar() {
+  var total = R.STORES.length, n = U.doneCount(pstates);
+  if (n > maxDone) maxDone = n; // never goes backwards when a store is tried again
+  $('pcount').textContent = maxDone + ' of ' + total + ' stores checked';
+  $('pfill').style.width = Math.round(maxDone * 100 / total) + '%';
+  $('pbar').setAttribute('aria-valuenow', String(maxDone));
+  $('pbar').setAttribute('aria-valuemax', String(total));
+}
 function initProgress(kill) {
-  var ul = $('plist'); ul.textContent = ''; plistItems = {}; var oldT = $('ptime'); if (oldT) oldT.remove();
+  var ul = $('plist'); ul.textContent = ''; plistItems = {}; pstates = {}; maxDone = 0; var oldT = $('ptime'); if (oldT) oldT.remove();
   R.STORES.forEach(function (s) {
-    var li = el('li'), st = el('span', 'st', kill[s.label] === false ? (W.OFF_TEXT[s.key] || 'Switched off') : 'Waiting...');
-    li.appendChild(el('span', null, s.label)); li.appendChild(st); ul.appendChild(li); plistItems[s.label] = st;
+    var off = kill[s.label] === false, li = el('li'), ic = el('span', 'ic ' + (off ? 'off' : 'wait')), nm = el('span', 'nm', s.label);
+    var st = el('span', 'st' + (off ? ' off' : ''), off ? (W.OFF_TEXT[s.key] || 'Switched off') : 'Waiting...');
+    ic.setAttribute('aria-hidden', 'true');
+    li.appendChild(ic); li.appendChild(nm); li.appendChild(st); ul.appendChild(li);
+    plistItems[s.label] = { ic: ic, st: st }; if (off) pstates[s.label] = 'off';
   });
-  $('progress').hidden = false;
+  $('progress').classList.add('running'); $('progress').hidden = false; refreshBar();
 }
 function updateProgress(run) {
   if (retry && run.state === 'off') return; // second pass: stores that are not retried keep their first-pass line
-  var st = plistItems[run.store]; if (!st) return;
+  var it = plistItems[run.store]; if (!it) return;
   var line = V.buildView({ query: {} }, [run]).stores[0];
-  st.textContent = (run.slow ? '3rd try (long wait): ' : retry && run.state !== 'off' ? '2nd try: ' : '') + W.lineText(run, line.text);
-  st.className = 'st ' + (run.state === 'ok' ? 'ok' : (run.state === 'off' || run.state === 'retrying' ? '' : 'bad'));
+  var s = U.shortLine(run, W.lineText(run, line.text)), tag = run.slow ? '3rd try' : (retry && run.state !== 'off' ? '2nd try' : '');
+  if (s.kind === 'skip') tag = ''; // a store skipped for a notice needs no try label
+  it.st.textContent = (tag ? tag + ': ' : '') + s.text;
+  it.st.className = 'st ' + s.kind; it.ic.className = 'ic ' + s.kind;
+  pstates[run.store] = run.state; refreshBar();
 }
 
 function safeUrl(u) { try { var x = new URL(u); return x.protocol === 'https:' ? x.href : null; } catch (_) { return null; } }
@@ -57,27 +72,45 @@ function addRow(ul, r) {
   li.appendChild(x); ul.appendChild(li);
 }
 
+function groupCard(g, hideNote) {
+  var card = el('article', 'card'), h = el('h3', null, g.title);
+  card.appendChild(h);
+  if (g.label) card.appendChild(el('span', 'badge', g.label));
+  if (g.note && !hideNote) card.appendChild(el('p', 'note', g.note));
+  var ul = el('ul', 'rows');
+  g.rows.forEach(function (r) { addRow(ul, r); });
+  card.appendChild(ul); return card;
+}
+
 function render(view) {
   var box = $('results'); box.textContent = '';
   $('empty').hidden = true;
   box.appendChild(el('h2', null, view.headline));
   if (view.note) box.appendChild(el('p', 'note', view.note));
+  var sp = U.splitGroups(view.groups, view.mode);
+  if (sp.multiNote) box.appendChild(el('p', 'note', sp.multiNote));
   if (view.top) {
     var tc = el('article', 'card toplow'), tu = el('ul', 'rows');
     tc.appendChild(el('h3', null, view.top.title)); tc.appendChild(el('p', 'note', view.top.note));
     view.top.rows.forEach(function (r) { addRow(tu, r); });
     tc.appendChild(tu); box.appendChild(tc);
   }
-  view.groups.forEach(function (g) {
-    var card = el('article', 'card'), h = el('h3', null, g.title);
-    if (g.label) h.appendChild(el('span', 'badge', g.label));
-    card.appendChild(h);
-    if (g.note) card.appendChild(el('p', 'note', g.note));
-    var ul = el('ul', 'rows');
-    g.rows.forEach(function (r) { addRow(ul, r); });
-    card.appendChild(ul); box.appendChild(card);
-  });
+  sp.multi.forEach(function (g) { box.appendChild(groupCard(g, !!sp.multiNote)); });
+  if (sp.single.length) {
+    var d = el('details', 'more'), sm = el('summary', null, 'Listed at one store only (' + sp.single.length + ')');
+    d.appendChild(sm);
+    if (sp.singleNote) d.appendChild(el('p', 'note', sp.singleNote));
+    sp.single.forEach(function (g) {
+      var sub = el('article', 'sub'), ul = el('ul', 'rows');
+      sub.appendChild(el('h3', null, g.title));
+      if (g.note && !sp.singleNote) sub.appendChild(el('p', 'note', g.note));
+      g.rows.forEach(function (r) { addRow(ul, r); });
+      sub.appendChild(ul); d.appendChild(sub);
+    });
+    box.appendChild(d);
+  }
   $('footnote').textContent = (view.seenAt ? 'Seen at ' + new Date(view.seenAt).toLocaleString() + '. ' : '') + view.footer;
+  try { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) { /* older webview: stay where we are */ }
 }
 
 function storeOf(label) { return R.STORES.filter(function (s) { return s.label === label; })[0]; }
@@ -129,7 +162,7 @@ async function onSubmit(ev) {
   } catch (e) {
     say('Something went wrong, nothing was compared. Please try again.');
     $('empty').hidden = false;
-  } finally { if (tabs) tabs.dispose(); if (tabs2) tabs2.dispose(); retry = false; setBusy(false); }
+  } finally { if (tabs) tabs.dispose(); if (tabs2) tabs2.dispose(); retry = false; $('progress').classList.remove('running'); setBusy(false); }
 }
 
 document.addEventListener('DOMContentLoaded', function () {
