@@ -2,3 +2,7 @@ node_modules/
 android/
 www/app.js
 *.apk
+*.pfx
+*.jks
+*.keystore
+*.p12

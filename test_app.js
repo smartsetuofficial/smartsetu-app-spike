@@ -400,6 +400,15 @@ function pageUndef() { return undefined; }
   ok(/workflow_dispatch/.test(yml) && !/^\s+push:/m.test(yml) && /smartsetu-debug-apk/.test(yml) && /npm test/.test(yml), 'D9 workflow is manual, runs tests, artifact name smartsetu-debug-apk');
   ok(!/showReport|copyReport|buildReport|navigator\.clipboard|execCommand/.test(appjs), 'D11 release app has no report builder and no clipboard code');
   ok(!/id="report"|copyrep|reptext/.test(html) && !/test build|test version|owner's own phone|diagnostic/i.test(html + appjs), 'D12 no report box and no test-build wording in index.html or app.js (D-082)');
+  var relPath = path.join(__dirname, '.github', 'workflows', 'release-apk.yml');
+  ok(fs.existsSync(relPath), 'D14 signed release workflow file exists');
+  var ry = fs.existsSync(relPath) ? fs.readFileSync(relPath, 'utf8') : '';
+  var secretLines = ry.split('\n').filter(function (l) { return /secrets\./.test(l); });
+  ok(/workflow_dispatch/.test(ry) && !/^\s+push:/m.test(ry) && secretLines.length === 2 && secretLines.every(function (l) { return /^\s+KS_(B64|PASS): \$\{\{ secrets\.SMARTSETU_KEYSTORE_(B64|PASS) \}\}$/.test(l); }) && !/echo[^\n]*\$\{?KS_PASS/.test(ry) && !/--ks-pass pass:/.test(ry), 'D14b release workflow: manual only, secrets only as env, password never echoed or put on the command line');
+  var iz = ry.indexOf('zipalign" -P 16 -f'), isg = ry.indexOf('apksigner" sign'), iv = ry.indexOf('apksigner" verify');
+  ok(iz > 0 && isg > iz && iv > isg && /--ks-pass env:KS_PASS/.test(ry) && /EXPECTED_CERT_SHA256: '[0-9a-f]{64}'/.test(ry) && /smartsetu-release-apk/.test(ry) && /npm test/.test(ry) && /if: always\(\)/.test(ry) && /rm -f "\$RUNNER_TEMP\/release\.pfx"/.test(ry) && /package: name='in\.smartsetu\.app'/.test(ry), 'D14c release workflow: zipalign before apksigner, then verify, expected certificate pinned, key file removed, package name checked');
+  var gi = read('.gitignore');
+  ok(/\*\.pfx/.test(gi) && /\*\.jks/.test(gi) && /\*\.keystore/.test(gi) && /\*\.p12/.test(gi), 'D14d .gitignore keeps key files out of git');
   ok(fs.existsSync(path.join(__dirname, '.gitignore')) && /www\/app\.js/.test(read('.gitignore')), 'D10 built www/app.js stays out of git');
   console.log('test_app: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
