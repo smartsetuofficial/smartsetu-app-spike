@@ -11,12 +11,14 @@ function detailOf(ev) {
 
 // Stores that are not read on the phone yet (shown honestly on the screen, D-078, D-081). Key = runner_core store key, label = runner_core store label.
 var OFF_TEXT = { myntra: 'No data on the phone app yet' };
+var NOCARDS_NOTE = { croma: "Croma's page asks for a pincode, so no products were shown." }; // seen on the page (V-242); the cause of the empty result stays unverified (V-243)
 function enabledMap() { return { Myntra: false }; }
 // view.js gives the store line text; the app adds the plain reason for a store that is off and the short error for a store that failed.
 function lineText(run, text) {
   text = String(text).replace(/(hidden|visible) tab/g, '$1 page'); // view.js says tab, the app has pages
   if (run && run.state === 'off' && OFF_TEXT[run.key]) return OFF_TEXT[run.key];
   if (run && run.state === 'error' && run.error) return text + ' (' + String(run.error).replace(/\s+/g, ' ').slice(0, 90) + ')';
+  if (run && run.state === 'no_cards' && NOCARDS_NOTE[run.key]) return text + '. ' + NOCARDS_NOTE[run.key];
   return text;
 }
 
@@ -475,7 +477,7 @@ function rescueLines(label, run) {
   return out;
 }
 
-var api = { createWebTabs: createWebTabs, detailOf: detailOf, enabledMap: enabledMap, lineText: lineText, diagLines: diagLines, OFF_TEXT: OFF_TEXT,
+var api = { createWebTabs: createWebTabs, detailOf: detailOf, enabledMap: enabledMap, lineText: lineText, diagLines: diagLines, OFF_TEXT: OFF_TEXT, NOCARDS_NOTE: NOCARDS_NOTE,
   sameSite: sameSite, failingLabels: failingLabels, enabledOnly: enabledOnly, mergeRuns: mergeRuns, pickProduct: pickProduct, pickFromView: pickFromView, rowsOf: rowsOf, readPage: readPage,
   offerProbe: offerProbe, structureProbe: structureProbe, offerLines: offerLines, structLines: structLines, buildReport: buildReport,
   timedOutLabels: timedOutLabels, listingLines: listingLines, scrollPage: scrollPage, slowRead: slowRead, isTileLine: isTileLine,
