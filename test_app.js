@@ -174,7 +174,7 @@ function pageUndef() { return undefined; }
   ok(dF.lines.join('|') === 'MRP \u20b91,34,900.00 (Inclusive of all taxes)4% OFF|10% up to Rs.15000 Instant Discount with IndusInd Bank Credit Card EMI|Flat Rs. 7000 Instant Discount with Kotak Bank Credit Card EMI|Save upto \u20b917,500|Amazon Pay ICICI Bank Credit Card|EMI \u20b926,118 x 6m|Extra 35% off on First Order|Premium EMI plans available', 'F2 offerProbe keeps offer lines and drops prose, titles and bare labels (premium is not EMI)');
   var viewF = { top: null, groups: [{ rows: [{ store: 'Reliance Digital', url: 'https://www.reliancedigital.in/product/x' }, { store: 'Amazon', url: 'http://www.amazon.in/dp/B0HTTP' }, { store: 'Amazon', url: 'https://www.amazon.in/dp/B0X' }] }, { rows: [{ store: 'Croma', url: 'https://evil.example/p' }] }] };
   ok(W.pickFromView(viewF, 'Amazon', 'https://www.amazon.in/s?k=a').url === 'https://www.amazon.in/dp/B0X' && W.pickFromView(viewF, 'Reliance Digital', 'https://www.reliancedigital.in/search').url === 'https://www.reliancedigital.in/product/x', 'F3 pickFromView takes the first https matched row of that store');
-  ok(/W\.pickFromView\(view, r\.store, st\.url\(q\)\)/.test(read('src/app.js')) && !/W\.pickProduct\(/.test(read('src/app.js')), 'F3b app opens the product page of a matched row only');
+  ok(!/readOffers|W\.pickFromView|W\.offerProbe|W\.pickProduct\(/.test(read('src/app.js')), 'F3b release app opens no product page and reads no offers (D-093)');
   ok(W.pickFromView(viewF, 'Croma', 'https://www.croma.com/s') === null && W.pickFromView(viewF, 'Flipkart', 'https://www.flipkart.com/s') === null && W.pickFromView(null, 'Amazon', 'https://www.amazon.in/s') === null && W.pickFromView({ top: { rows: [{ store: 'Ajio', url: 'https://www.ajio.com/p/1' }] }, groups: [] }, 'Ajio', 'https://www.ajio.com/s').url === 'https://www.ajio.com/p/1', 'F3 no matched row, other site or no view gives null; the top table rows count');
   var pD = mockPlugin(), wD = W.createWebTabs(pD.api);
   await wD.tabs.create({ url: 'https://a.test/' }); var tD2 = await wD.tabs.create({ url: 'https://b.test/' }); await wD.tabs.remove(tD2.id); wD.dispose(); await sleep(5);
@@ -257,7 +257,7 @@ function pageUndef() { return undefined; }
   W.mergeRuns(outM, { runs: [sH] });
   ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
   var appH = read('src/app.js');
-  ok(/VERSION = '0\.8\.3'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /listings: W\.listingLines\(out \? out\.runs : \[\], view \? W\.rowsOf\(view\) : \[\], SmartSetu\.parseSearch\)/.test(appH) && /run\.slow \? '3rd try \(long wait\): '/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'H15 app wiring: slow third try, listings in report, 3rd-try label, still only 2 runAll calls');
+  ok(/VERSION = '0\.9\.0'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /run\.slow \? '3rd try \(long wait\): '/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'H15 app wiring: slow third try, 3rd-try label, still only 2 runAll calls');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -344,7 +344,7 @@ function pageUndef() { return undefined; }
   ok(rl.length === 2 && /still 0 cards/.test(rl[0]) && /price elements 59/.test(rl[0]) && /grid 40/.test(rl[0]) && /^Cut html 1 /.test(rl[1]), 'J11 rescue report lines show counts and the cut html');
   var jrep = W.buildReport({ version: 'v', rescue: ['Flipkart rescue: x'] });
   ok(/CARD RESCUE \(S14-1g\)/.test(jrep) && /Flipkart rescue: x/.test(jrep), 'J12 report has a CARD RESCUE section');
-  ok(/W\.rescueRead\(tabs2, storeOf\(empty\[em\]\), q, \{\}\)/.test(appH) && /var empty = W\.failingLabels\(out\.runs\)/.test(appH) && /rescue: rep\.rescue/.test(appH) && /rr\.state === 'ok'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'J13 app wiring: rescue only for stores still empty, an ok run replaces the empty one, report carries it, still 2 runAll');
+  ok(/W\.rescueRead\(tabs2, storeOf\(empty\[em\]\), q, \{\}\)/.test(appH) && /var empty = W\.failingLabels\(out\.runs\)/.test(appH) && /rr\.state === 'ok'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'J13 app wiring: rescue only for stores still empty, an ok run replaces the empty one, still 2 runAll');
   var rescSrc = W.cardRescue.toString();
   ok(rescSrc.indexOf('fetch(') < 0 && rescSrc.indexOf('XMLHttpRequest') < 0 && rescSrc.indexOf('localStorage') < 0 && rescSrc.indexOf('document.cookie') < 0 && rescSrc.indexOf('eval(') < 0, 'J14 page function reads only: no network, storage, cookie, eval');
 
@@ -381,25 +381,25 @@ function pageUndef() { return undefined; }
   var lreal = global.SmartSetu.parseSearch({ v: 1, kind: 'search', query: 'iphone', url: 'https://www.amazon.in/s?k=iphone', probe: 'x', cards: [{ link: 'https://www.amazon.in/dp/B0EEEEEEE1', sponsored: false, ad: false, html: '<div class="s-card"><a href="https://www.amazon.in/dp/B0EEEEEEE1"><h2>Apple iPhone 17 Pro 256 GB: 15.93 cm Display</h2></a></div>' }] });
   var l5 = W.listingLines([{ store: 'Amazon', snapshot: { cards: [{ link: 'https://www.amazon.in/dp/B0EEEEEEE1', sponsored: false, ad: false, html: '<div class="s-card"><a href="https://www.amazon.in/dp/B0EEEEEEE1"><h2>Apple iPhone 17 Pro 256 GB: 15.93 cm Display</h2></a></div>' }], v: 1, kind: 'search', query: 'iphone', url: 'https://www.amazon.in/s?k=iphone', probe: 'x' } }], [], global.SmartSetu.parseSearch);
   ok(lreal.cards.length === 1 && lreal.cards[0].priceNow == null && l5.some(function (x) { return /^- no-price card html 1 \| .*<h2>Apple iPhone 17 Pro 256 GB/.test(x); }), 'L5 with the real parser: a card without a price prints its own html');
-  ok(/rep\.offers\.push\('--- end of ' \+ r\.store \+ ' block \(' \+ lines\.length \+ ' lines\) ---'\)/.test(appH), 'L6 each offers block ends with a marker line');
+  ok(!/\brep\b|diag\[|struct\[|lastProbe|probe: true/.test(appH), 'L6 release app keeps no diagnostic state (D-093)');
 
   // D: shipped files
   var ext = path.join(__dirname, '..', 'extension'), www = path.join(__dirname, 'www');
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.8.3' && /probe: true/.test(appjs) && (appjs.match(/showDiag\(\)/g) || []).length >= 2, 'D3b app version and diagnostic wired');
+  ok(pkg.version === '0.9.0' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.9.0, no diagnostic or report wired');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 2 && appjs.indexOf('.runAll(') > appjs.indexOf('async function onSubmit') && /addEventListener\('submit', onSubmit\)/.test(appjs), 'D5 runAll only inside the Compare submit handler (D-010)');
-  ok(/customUserAgent/.test(appjs) && /readOffers\(out, q, tabs, tabs2, view\)/.test(appjs) && /structureProbe/.test(appjs) && /offerProbe/.test(appjs) && /desktopUa\(navigator\.userAgent\)/.test(appjs) && /retry && run\.state === 'off'/.test(appjs), 'D6b second try, structure and offers are wired');
+  ok(/customUserAgent/.test(appjs) && !/readOffers|structureProbe|offerProbe/.test(appjs) && /desktopUa\(navigator\.userAgent\)/.test(appjs) && /retry && run\.state === 'off'/.test(appjs), 'D6b second try kept, structure and offers reads gone');
   ok(/maxTabs: 1/.test(appjs) && /foreground: false/.test(appjs) && /enabledMap\(\)/.test(appjs), 'D6 one store at a time, hidden, Myntra off');
   var order = ['bundle.js', 'pagesnap.js', 'runner_core.js', 'view.js', 'app.js'].map(function (f) { return html.indexOf('src="' + f + '"'); });
   ok(order.every(function (x, i) { return x >= 0 && (i === 0 || x > order[i - 1]); }), 'D7 index.html loads the 5 scripts in order');
   ok(html.indexOf('<form') >= 0 && html.indexOf('viewport-fit=cover') >= 0 && html.indexOf('SmartSetu') >= 0 && html.indexOf('Spike') < 0, 'D8 index.html is the app screen (form, safe area, no spike text)');
   ok(/workflow_dispatch/.test(yml) && !/^\s+push:/m.test(yml) && /smartsetu-debug-apk/.test(yml) && /npm test/.test(yml), 'D9 workflow is manual, runs tests, artifact name smartsetu-debug-apk');
-  ok(/function showReport\(/.test(appjs) && /function copyReport\(/.test(appjs) && /W\.buildReport\(/.test(appjs) && /finally \{[^}]*showReport\(q, out, view, err, t0\)/.test(appjs) && /navigator\.clipboard/.test(appjs) && /execCommand\('copy'\)/.test(appjs) && /\.then\(function \(\) \{[^}]*\}, fallback\); else fallback\(\);/.test(appjs) && /addEventListener\('click', copyReport\)/.test(appjs), 'D11 app builds the report in finally (also after an error) and copies it by clipboard with a select fallback');
-  ok(/id="report"[^>]*hidden/.test(html) && /id="copyrep"/.test(html) && /id="reptext"[^>]*readonly/.test(html), 'D12 index.html has the hidden report box, Copy button and read-only text box');
+  ok(!/showReport|copyReport|buildReport|navigator\.clipboard|execCommand/.test(appjs), 'D11 release app has no report builder and no clipboard code');
+  ok(!/id="report"|copyrep|reptext/.test(html) && !/test build|test version|owner's own phone|diagnostic/i.test(html + appjs), 'D12 no report box and no test-build wording in index.html or app.js (D-082)');
   ok(fs.existsSync(path.join(__dirname, '.gitignore')) && /www\/app\.js/.test(read('.gitignore')), 'D10 built www/app.js stays out of git');
   console.log('test_app: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);

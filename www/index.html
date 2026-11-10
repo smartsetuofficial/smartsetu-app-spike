@@ -9,9 +9,6 @@
   .top{padding-top:env(safe-area-inset-top,0px)}
   .foot{padding-bottom:calc(48px + env(safe-area-inset-bottom,0px))}
   .hero{padding-top:24px}
-  .beta{margin:12px 0 0;padding:8px 12px;border-radius:12px;background:#FEF3C7;color:#78350F;font-size:14px}
-  #reptext{display:block;width:100%;margin-top:12px;padding:8px;border:1px solid var(--line);border-radius:var(--r-md);font:12px/1.4 monospace;color:var(--text);background:#fff;resize:vertical}
-  #report[hidden]{display:none}
 </style>
 </head>
 <body>
@@ -26,11 +23,10 @@
       <button id="go" class="btn" type="submit">Compare</button>
     </form>
     <p class="privacy">Stores open only when you press Compare. Nothing is sent to our servers; the results stay on your phone.</p>
-    <p class="beta">Test version for the owner's own phone. It can take a few minutes because stores are read one after another.</p>
+    <p class="privacy">Stores are checked one after another, so a comparison can take a few minutes.</p>
   </section>
   <p id="msg" class="msg" role="status" aria-live="polite"></p>
   <section id="progress" class="card" hidden aria-label="Store progress"><h2>Checking stores</h2><ul id="plist" class="plist"></ul></section>
-  <section id="report" class="card" hidden aria-label="Report"><h2>Report (test build)</h2><p id="repmsg" class="note"></p><button id="copyrep" class="btn2" type="button">Copy full report</button><textarea id="reptext" readonly rows="8" aria-label="Full report text"></textarea></section>
   <section id="results" aria-live="polite"></section>
   <section id="empty" class="empty"><h2>Nothing compared yet</h2><p>Your results will appear here. Search for a product name or model, or a type of product such as "red tape shoes for women".</p></section>
 </main>

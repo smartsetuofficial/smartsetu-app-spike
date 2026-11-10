@@ -1,8 +1,8 @@
 {
   "name": "smartsetu-app",
-  "version": "0.8.3",
+  "version": "0.9.0",
   "private": true,
-  "description": "SmartSetu Android app (S14-1 test build): the extension Compare screen on hidden webviews, 8 stores. Not released.",
+  "description": "SmartSetu Android app (release candidate, S14-3): the extension Compare screen on hidden webviews, 8 stores. Not released yet.",
   "scripts": {
     "build": "esbuild src/app.js --bundle --format=iife --outfile=www/app.js",
     "test": "node test_spike.js && node test_app.js"
