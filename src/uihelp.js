@@ -39,4 +39,21 @@ function splitGroups(groups, mode) {
   return { multi: multi, single: single, multiNote: shared(multi), singleNote: shared(single) };
 }
 
-module.exports = { isFinal: isFinal, doneCount: doneCount, shortLine: shortLine, splitGroups: splitGroups, SKIP_TEXT: SKIP_TEXT };
+// Rupees from a shown price like "\u20b91,29,900" (digits only). null when there is no number.
+function rupeesOf(text) { var d = String(text == null ? '' : text).replace(/[^0-9]/g, ''); return d ? parseInt(d, 10) : null; }
+
+// How much cheaper the lowest row is than the next cheapest store, from the two shown prices only (plain subtraction, nothing estimated).
+// rows = view rows { store, price, isLowest, odd }. Returns { amount, store } or null.
+function savings(rows) {
+  var list = (rows || []).filter(function (r) { return r && !r.odd && rupeesOf(r.price) != null; });
+  var low = list.filter(function (r) { return r.isLowest; })[0];
+  if (!low) return null;
+  var lp = rupeesOf(low.price), next = null;
+  list.forEach(function (r) { var p = rupeesOf(r.price); if (r !== low && r.store !== low.store && p > lp && (!next || p < rupeesOf(next.price))) next = r; });
+  return next ? { amount: rupeesOf(next.price) - lp, store: next.store } : null;
+}
+
+// Indian digit grouping for the savings line, e.g. 5000 -> "\u20b95,000", 125000 -> "\u20b91,25,000".
+function inr(n) { var s = String(Math.round(n)), last = s.slice(-3), rest = s.slice(0, -3); return '\u20b9' + (rest ? rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' : '') + last; }
+
+module.exports = { rupeesOf: rupeesOf, savings: savings, inr: inr, isFinal: isFinal, doneCount: doneCount, shortLine: shortLine, splitGroups: splitGroups, SKIP_TEXT: SKIP_TEXT };

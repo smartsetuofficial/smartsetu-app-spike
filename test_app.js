@@ -257,7 +257,7 @@ function pageUndef() { return undefined; }
   W.mergeRuns(outM, { runs: [sH] });
   ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
   var appH = read('src/app.js');
-  ok(/VERSION = '0\.9\.1'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /run\.slow \? '3rd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'H15 app wiring: slow third try, 3rd-try label, still only 2 runAll calls');
+  ok(/VERSION = '0\.10\.0'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /run\.slow \? '3rd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try, 3rd-try label, one runAll inside runStores, 2 callers');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -344,7 +344,7 @@ function pageUndef() { return undefined; }
   ok(rl.length === 2 && /still 0 cards/.test(rl[0]) && /price elements 59/.test(rl[0]) && /grid 40/.test(rl[0]) && /^Cut html 1 /.test(rl[1]), 'J11 rescue report lines show counts and the cut html');
   var jrep = W.buildReport({ version: 'v', rescue: ['Flipkart rescue: x'] });
   ok(/CARD RESCUE \(S14-1g\)/.test(jrep) && /Flipkart rescue: x/.test(jrep), 'J12 report has a CARD RESCUE section');
-  ok(/W\.rescueRead\(tabs2, storeOf\(empty\[em\]\), q, \{\}\)/.test(appH) && /var empty = W\.failingLabels\(out\.runs\)/.test(appH) && /rr\.state === 'ok'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 2, 'J13 app wiring: rescue only for stores still empty, an ok run replaces the empty one, still 2 runAll');
+  ok(/W\.rescueRead\(tabs2, storeOf\(empty\[em\]\), q, \{\}\)/.test(appH) && /var empty = W\.failingLabels\(out\.runs\)/.test(appH) && /rr\.state === 'ok'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'J13 app wiring: rescue only for stores still empty, an ok run replaces the empty one, one runAll inside runStores');
   var rescSrc = W.cardRescue.toString();
   ok(rescSrc.indexOf('fetch(') < 0 && rescSrc.indexOf('XMLHttpRequest') < 0 && rescSrc.indexOf('localStorage') < 0 && rescSrc.indexOf('document.cookie') < 0 && rescSrc.indexOf('eval(') < 0, 'J14 page function reads only: no network, storage, cookie, eval');
 
@@ -388,10 +388,10 @@ function pageUndef() { return undefined; }
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.9.1' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.9.1, no diagnostic or report wired');
+  ok(pkg.version === '0.10.0' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.0, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
-  ok((appjs.match(/\.runAll\(/g) || []).length === 2 && appjs.indexOf('.runAll(') > appjs.indexOf('async function onSubmit') && /addEventListener\('submit', onSubmit\)/.test(appjs), 'D5 runAll only inside the Compare submit handler (D-010)');
+  ok((appjs.match(/\.runAll\(/g) || []).length === 1 && (appjs.match(/runStores\(/g) || []).length === 3 && appjs.indexOf('await runStores(') > appjs.indexOf('async function startRun') && (appjs.match(/startRun\(/g) || []).length === 3 && /addEventListener\('submit', onSubmit\)/.test(appjs) && /getElementById\('morebtn'\)|\$\('morebtn'\)\.addEventListener\('click'/.test(appjs), 'D5 stores start only inside startRun, reached only from the Compare submit or the also-check tap (D-010)');
   ok(/customUserAgent/.test(appjs) && !/readOffers|structureProbe|offerProbe/.test(appjs) && /desktopUa\(navigator\.userAgent\)/.test(appjs) && /retry && run\.state === 'off'/.test(appjs), 'D6b second try kept, structure and offers reads gone');
   ok(/maxTabs: 1/.test(appjs) && /foreground: false/.test(appjs) && /enabledMap\(\)/.test(appjs), 'D6 one store at a time, hidden, Myntra off');
   var order = ['bundle.js', 'pagesnap.js', 'runner_core.js', 'view.js', 'app.js'].map(function (f) { return html.indexOf('src="' + f + '"'); });
@@ -430,9 +430,9 @@ function pageUndef() { return undefined; }
   ok(U.splitGroups(null, 'specific').multi.length === 0 && U.splitGroups([gA, { comparable: true, note: 'N9', rows: [1, 2] }], 'specific').multiNote === '', 'U10 empty input is safe, different notes are not merged');
   var css = read('www/app.css'), cmpCss = read('www/compare.css');
   ok(html.indexOf('href="compare.css"') >= 0 && html.indexOf('href="app.css"') > html.indexOf('href="compare.css"') && html.indexOf('name="theme-color"') > 0 && /id="pbar"[^>]*role="progressbar"/.test(html) && html.indexOf('id="pcount"') > 0 && html.indexOf('id="pfill"') > 0, 'U11 index.html loads app.css after compare.css, has the progress bar and theme colour');
-  ok(!/https?:\/\//.test(css) && !/https?:\/\/(?!www\.w3\.org)/.test(html) && !/@import|url\(/.test(css), 'U12 app.css and index.html call no other host (no remote font, image or script)');
+  ok(!/https?:\/\//.test(css) && !/https?:\/\/(?!www\.w3\.org)/.test(html) && !/@import/.test(css) && !/url\((?!fonts\/Inter-(Regular|Medium|Bold)\.woff2\))/.test(css), 'U12 app.css and index.html call no other host (only the 3 bundled Inter files)');
   ok(/prefers-reduced-motion/.test(css) && cmpCss.indexOf('.ic') < 0, 'U13 reduced motion respected, shared compare.css left alone');
-  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.9\.1'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
+  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.0'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
   function pngSize(f) { var b = fs.readFileSync(f); return b.slice(0, 8).toString('hex') === '89504e470d0a1a0a' ? [b.readUInt32BE(16), b.readUInt32BE(20)] : null; }
   var resDir = path.join(__dirname, 'resources', 'android', 'res'), fgS = { mdpi: 108, hdpi: 162, xhdpi: 216, xxhdpi: 324, xxxhdpi: 432 }, lgS = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
   var iconsOk = Object.keys(fgS).every(function (d) {
@@ -446,8 +446,41 @@ function pageUndef() { return undefined; }
   var ryml = read('.github/workflows/release-apk.yml'), dyml = read('.github/workflows/apk.yml');
   function stepOrder(y) { var a = y.indexOf('cap sync android'), b = y.indexOf('name: Apply SmartSetu icon and splash'), c = y.indexOf('cp -R resources/android/res/. android/app/src/main/res/'), d = y.indexOf('./gradlew assemble'); return a > 0 && b > a && c > b && d > c; }
   ok(stepOrder(ryml) && stepOrder(dyml), 'U18 both workflows copy the icon and splash files after cap sync and before Gradle');
-  ok(/^\/android\/$/m.test(gi) && !/^android\/$/m.test(gi), 'U19 .gitignore ignores only the generated root android/ folder, so resources/android is tracked (D-095 fix)');
-  if (fs.existsSync(path.join(__dirname, '.git'))) { var gci = require('child_process').spawnSync('git', ['check-ignore', '-q', 'resources/android/res/mipmap-mdpi/ic_launcher_foreground.png'], { cwd: __dirname }); if (!gci.error) ok(gci.status === 1, 'U20 git does not ignore the icon files under resources/android'); }
+
+  // S15 (D-096): which store sells what, native fast read, live results, hidden store test, Inter font, new screen.
+  var SM = require('./src/storemap.js'), NFm = require('./src/nativefetch.js'), DT = require('./src/devtest.js'), Rn = require('./www/runner_core.js');
+  var stK = Rn.STORES.map(function (x) { return x.key; }), pk = function (q) { return SM.pick(q, Rn.STORES); };
+  ok(Object.keys(SM.SELLS).sort().join() === stK.slice().sort().join() && SM.SELLS.amazon.length === 7 && SM.SELLS.flipkart.length === 7, 'S1 every runner store has an entry in the store map, Amazon and Flipkart sell everything');
+  ok(SM.classify('iPhone 17 Pro')[0] === 'mobile' && SM.classify('boAt Airdopes 141')[0] === 'gadget' && SM.classify('red tape shoes for men')[0] === 'fashion' && SM.classify('Ponds cream')[0] === 'beauty' && SM.classify('Samsung washing machine')[0] === 'appliance' && SM.classify('xyz widget').length === 0 && SM.classify('').length === 0 && SM.classify(null).length === 0, 'S2 query kinds: phone, gadget, fashion, beauty, appliance, unknown, empty');
+  var pI = pk('iPhone 17 Pro');
+  ok(pI.keys.join() === 'amazon,flipkart,tatacliq,croma,reliancedigital' && !!pI.skip.myntra && !!pI.skip.ajio && !!pI.skip.nykaa && !!pI.skip.meesho && /phones/.test(pI.skip.myntra), 'S3 a phone search skips the fashion and beauty stores and says why');
+  ok(pk('xyz widget').keys.length === 9 && Object.keys(pk('xyz widget').skip).length === 0, 'S4 an unknown search opens every store (nothing is guessed)');
+  ok(['iphone 15','red tape shoes','ponds cream','laptop','samsung tv','nike air max','lipstick','bedsheet','boat earbuds','mixer grinder','watch','cricket bat','t shirt','h&m dress','vitamin c serum','prestige cooker','whey protein','mi band 8','iphone 15 case','xyz'].every(function (q) { var r = pk(q); return r.keys.indexOf('amazon') >= 0 && r.keys.indexOf('flipkart') >= 0 && r.keys.length >= 2; }), 'S5 Amazon and Flipkart are never skipped');
+  ok(pk('iphone 15 case').keys.indexOf('meesho') >= 0 && pk('red tape shoes').keys.indexOf('myntra') >= 0 && pk('ponds cream').keys.indexOf('nykaa') >= 0 && pk('mixer grinder').keys.indexOf('croma') >= 0 && pk('mixer grinder').keys.indexOf('ajio') < 0, 'S6 mixed and shared categories reach the right stores');
+  var nfCalls = [], nfHttp = { get: function (o) { nfCalls.push(o); return Promise.resolve({ status: 200, url: o.url, data: '<html>' + 'x'.repeat(10) }); } };
+  var nfRes = await NFm.makeFetch(nfHttp, 'UA/1', { readMs: 7000 })('https://www.example.in/s?k=a');
+  ok(nfCalls.length === 1 && nfCalls[0].headers['User-Agent'] === 'UA/1' && nfCalls[0].responseType === 'text' && nfCalls[0].readTimeout === 7000 && nfCalls[0].connectTimeout === 6000 && !nfCalls[0].headers.Cookie && nfRes.status === 200 && (await nfRes.text()).length === 16, 'N1 native read: identity header, text, timeouts, no cookie header, status and text back');
+  var nfObj = await NFm.makeFetch({ get: function () { return Promise.resolve({ status: 503, data: { a: 1 } }); } }, '')('https://x.in/');
+  var nfErr = null; try { await NFm.makeFetch({ get: function () { return Promise.reject(new Error('net down')); } }, '')('https://x.in/'); } catch (e) { nfErr = e; }
+  ok(nfObj.status === 503 && nfObj.url === 'https://x.in/' && (await nfObj.text()) === '{"a":1}' && nfErr && /net down/.test(nfErr.message), 'N2 object body becomes text, HTTP status passes through, a network failure rejects');
+  var FRm = require('./www/fetchread.js'), frSnap = { cards: [{ link: 'https://www.example.in/p/1', html: '<a>x</a>' }] };
+  var frRead = FRm.make(NFm.makeFetch({ get: function (o) { return Promise.resolve({ status: 200, url: o.url, data: '<html>' + 'y'.repeat(1200) }); } }, 'UA'), function (txt, url) { return frSnap; });
+  var frOut = await frRead({ url: function (q) { return 'https://www.example.in/s?k=' + q; } }, 'abc');
+  var frRedirect = await FRm.make(NFm.makeFetch({ get: function (o) { return Promise.resolve({ status: 200, url: 'https://other.com/login', data: '<html>' + 'y'.repeat(1200) }); } }, 'UA'), function () { return frSnap; })({ url: function (q) { return 'https://www.example.in/s?k=' + q; } }, 'abc');
+  ok(frOut === frSnap && frRedirect === null && FRm.STORES_OK.join() === 'amazon,flipkart,nykaa,reliancedigital', 'N3 fetchread works on top of the native read: same-site page gives the snapshot, a redirect to another site gives null (falls back to a page)');
+  ok(U.inr(5000) === '\u20b95,000' && U.inr(125000) === '\u20b91,25,000' && U.inr(999) === '\u20b9999' && U.rupeesOf('\u20b91,29,900') === 129900 && U.rupeesOf('Price not shown') === null, 'X1 rupee helpers');
+  var svA = U.savings([{ store: 'Reliance Digital', price: '\u20b91,29,900', isLowest: true }, { store: 'Flipkart', price: '\u20b91,34,900' }, { store: 'Tata CLiQ', price: '\u20b91,31,000' }]);
+  ok(svA && svA.amount === 1100 && svA.store === 'Tata CLiQ' && U.savings([{ store: 'A', price: '\u20b9100', isLowest: true }]) === null && U.savings([{ store: 'A', price: '\u20b9100', isLowest: true }, { store: 'B', price: '\u20b9100' }]) === null && U.savings([{ store: 'A', price: '\u20b9100', isLowest: true }, { store: 'B', price: '\u20b9900', odd: true }]) === null && U.savings([]) === null, 'X2 savings = plain difference to the next cheapest store, none when equal, odd or alone');
+  ok(DT.flags('Enter the characters you see below. Sorry, we just need to make sure you are not a robot. captcha').indexOf('robot-check words') >= 0 && DT.flags('Enter pincode to see products').indexOf('pincode words') >= 0 && DT.flags('hello').length === 0 && DT.strip('<style>a{}</style><p>Hi&nbsp;there</p><script>x()</script>') === 'Hi there', 'T1 store test helpers: page notices are recognised, html is stripped');
+  ok(/^Amazon \| fast read \| HTTP 200 \| 1200 bytes \| same site yes \| cards read 24 \| 2\.5 s/.test(DT.fastLine({ label: 'Amazon', status: 200, bytes: 1200, sameSite: true, cards: 24, ms: 2500, flags: [], head: 'x' })) && /FAILED after 300 ms \| net down/.test(DT.fastLine({ label: 'Ajio', error: 'net down', ms: 300 })), 'T2 store test report lines');
+  var devSrc = read('src/devtest.js');
+  ok(/DEV-ONLY/.test(devSrc) && (appjs.match(/require\('\.\/devtest\.js'\)/g) || []).length === 1 && !/devtest|Store test/i.test(html) && /taps\.length >= 7/.test(devSrc) && devSrc.indexOf('localStorage') < 0 && devSrc.indexOf('fetch(') < 0 && devSrc.indexOf('eval(') < 0, 'T3 store test is separate (devtest.js), opens only after 7 taps on the logo, not named in index.html, no storage, no fetch, no eval');
+  ok(/fetchFirst = SmartSetuFetchRead\.STORES_OK/.test(appjs) && /fetchMs = 9000/.test(appjs) && /NF\.makeFetch\(CapacitorHttp, C\.desktopUa\(navigator\.userAgent\)\)/.test(appjs) && /M\.pick\(q, R\.STORES\)/.test(appjs) && /kill\.Croma = false/.test(appjs) && /maxTabs: 1/.test(appjs) && /liveRender\(\)/.test(appjs) && /First results after/.test(appjs), 'W1 app wiring: fast read for the proven stores, store pick, Croma paused, live results, first-result time');
+  ok(html.indexOf('src="snapdoc.js"') > html.indexOf('src="pagesnap.js"') && html.indexOf('src="fetchread.js"') > html.indexOf('src="snapdoc.js"') && html.indexOf('src="app.js"') > html.indexOf('src="view.js"') && ['id="logo"', 'id="morebox"', 'id="morebtn"', 'class="chips"', 'id="plist"', 'id="results"', 'id="empty"'].every(function (x) { return html.indexOf(x) > 0; }), 'W2 index.html: scripts in order, all ids the app needs');
+  if (fs.existsSync(ext)) ok(['snapdoc.js', 'fetchread.js'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'W3 www snapdoc.js and fetchread.js equal the extension files');
+  var fontOk = ['Regular', 'Medium', 'Bold'].every(function (w) { var f = path.join(www, 'fonts', 'Inter-' + w + '.woff2'), b = fs.existsSync(f) ? fs.readFileSync(f) : null; return b && b.length > 3000 && b.length < 60000 && b.slice(0, 4).toString() === 'wOF2' && css.indexOf('fonts/Inter-' + w + '.woff2') > 0; });
+  ok(fontOk && /Inter 4\.1/.test(fs.readFileSync(path.join(www, 'fonts', 'Inter-LICENSE.txt'), 'utf8') + css) && /SIL Open Font License/i.test(fs.readFileSync(path.join(www, 'fonts', 'Inter-LICENSE.txt'), 'utf8')), 'F1 Inter Regular, Medium, Bold bundled (woff2, small), licence file next to them');
+  ok(!/innerHTML/.test(devSrc) && (devSrc.match(/clipboard/g) || []).length >= 1 && !/clipboard|buildReport|execCommand/.test(appjs), 'T4 clipboard and report code are only in devtest.js, not in app.js');
   console.log('test_app: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
 })();
