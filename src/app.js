@@ -11,7 +11,7 @@ var M = require('./storemap.js');
 var NF = require('./nativefetch.js');
 var Dev = require('./devtest.js');
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.0';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.1';
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = { Myntra: 'Not on the phone app yet', Croma: 'Needs a pincode, not supported yet' };
 function $(id) { return document.getElementById(id); }
@@ -198,20 +198,20 @@ async function startRun(q, only) {
     retry = false;
     function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, perStoreMs: 50000, retryTimeouts: false }; }
     var o1 = opts(pl.enabled); o1.fetchFirst = SmartSetuFetchRead.STORES_OK; o1.fetchRead = fr; o1.fetchMs = 9000;
-    tabs = W.createWebTabs(pluginApi());
+    tabs = W.createWebTabs(pluginApi(), { ready: true });
     out = await runStores(tabs, o1);
     adopt(out.runs);
     var bad = W.failingLabels(out.runs);
     if (bad.length) {
       say('Checking ' + bad.join(', ') + ' again...');
       retry = true;
-      tabs2 = W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)));
+      tabs2 = W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
       W.mergeRuns(out, await runStores(tabs2, opts(W.enabledOnly(R.STORES, bad))));
       retry = false; adopt(out.runs); liveRender();
     }
     var slowL = late() ? [] : W.timedOutLabels(out.runs); // a store that timed out gets one more try with a long wait and scrolling (every store, D-073)
     if (slowL.length) {
-      tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)));
+      tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
       for (var sl = 0; sl < slowL.length; sl++) {
         say('Checking ' + slowL[sl] + ' once more, it is slow...');
         var sr = await W.slowRead(tabs2, storeOf(slowL[sl]), q, smartsetuCollect, {});
@@ -221,7 +221,7 @@ async function startRun(q, only) {
     var empty = W.failingLabels(out.runs); // a store that is still empty gets a card rescue read (every store, D-073)
     if (late()) empty = []; // the run has already taken long: show what is there instead of more tries
     if (empty.length) {
-      tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)));
+      tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
       for (var em = 0; em < empty.length; em++) {
         say('Checking ' + empty[em] + ' one last way...');
         var rr = await W.rescueRead(tabs2, storeOf(empty[em]), q, {});

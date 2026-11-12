@@ -257,7 +257,7 @@ function pageUndef() { return undefined; }
   W.mergeRuns(outM, { runs: [sH] });
   ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
   var appH = read('src/app.js');
-  ok(/VERSION = '0\.10\.0'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /run\.slow \? '3rd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try, 3rd-try label, one runAll inside runStores, 2 callers');
+  ok(/VERSION = '0\.10\.1'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /run\.slow \? '3rd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try, 3rd-try label, one runAll inside runStores, 2 callers');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -388,7 +388,7 @@ function pageUndef() { return undefined; }
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.10.0' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.0, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
+  ok(pkg.version === '0.10.1' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.1, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 1 && (appjs.match(/runStores\(/g) || []).length === 3 && appjs.indexOf('await runStores(') > appjs.indexOf('async function startRun') && (appjs.match(/startRun\(/g) || []).length === 3 && /addEventListener\('submit', onSubmit\)/.test(appjs) && /getElementById\('morebtn'\)|\$\('morebtn'\)\.addEventListener\('click'/.test(appjs), 'D5 stores start only inside startRun, reached only from the Compare submit or the also-check tap (D-010)');
@@ -432,7 +432,7 @@ function pageUndef() { return undefined; }
   ok(html.indexOf('href="compare.css"') >= 0 && html.indexOf('href="app.css"') > html.indexOf('href="compare.css"') && html.indexOf('name="theme-color"') > 0 && /id="pbar"[^>]*role="progressbar"/.test(html) && html.indexOf('id="pcount"') > 0 && html.indexOf('id="pfill"') > 0, 'U11 index.html loads app.css after compare.css, has the progress bar and theme colour');
   ok(!/https?:\/\//.test(css) && !/https?:\/\/(?!www\.w3\.org)/.test(html) && !/@import/.test(css) && !/url\((?!fonts\/Inter-(Regular|Medium|Bold)\.woff2\))/.test(css), 'U12 app.css and index.html call no other host (only the 3 bundled Inter files)');
   ok(/prefers-reduced-motion/.test(css) && cmpCss.indexOf('.ic') < 0, 'U13 reduced motion respected, shared compare.css left alone');
-  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.0'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
+  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.1'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
   function pngSize(f) { var b = fs.readFileSync(f); return b.slice(0, 8).toString('hex') === '89504e470d0a1a0a' ? [b.readUInt32BE(16), b.readUInt32BE(20)] : null; }
   var resDir = path.join(__dirname, 'resources', 'android', 'res'), fgS = { mdpi: 108, hdpi: 162, xhdpi: 216, xxhdpi: 324, xxxhdpi: 432 }, lgS = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
   var iconsOk = Object.keys(fgS).every(function (d) {
@@ -481,6 +481,47 @@ function pageUndef() { return undefined; }
   var fontOk = ['Regular', 'Medium', 'Bold'].every(function (w) { var f = path.join(www, 'fonts', 'Inter-' + w + '.woff2'), b = fs.existsSync(f) ? fs.readFileSync(f) : null; return b && b.length > 3000 && b.length < 60000 && b.slice(0, 4).toString() === 'wOF2' && css.indexOf('fonts/Inter-' + w + '.woff2') > 0; });
   ok(fontOk && /Inter 4\.1/.test(fs.readFileSync(path.join(www, 'fonts', 'Inter-LICENSE.txt'), 'utf8') + css) && /SIL Open Font License/i.test(fs.readFileSync(path.join(www, 'fonts', 'Inter-LICENSE.txt'), 'utf8')), 'F1 Inter Regular, Medium, Bold bundled (woff2, small), licence file next to them');
   ok(!/innerHTML/.test(devSrc) && (devSrc.match(/clipboard/g) || []).length >= 1 && !/clipboard|buildReport|execCommand/.test(appjs), 'T4 clipboard and report code are only in devtest.js, not in app.js');
+
+  // R: S15b (D-097) a page whose load event never comes is read as soon as its price amounts show and stay the same (every store, not Tata CLiQ only)
+  function noLoadPlugin(doc) { var pn = mockPlugin({ doc: doc }); pn.api.onLoaded = function () { return Promise.resolve(function () {}); }; return pn; }
+  function priceDoc(textFn) { return { title: 'x', body: { get innerText() { return textFn(); } }, querySelectorAll: function () { return []; } }; }
+  var tenP = new Array(11).join('\u20b91,199 ').trim(), rOpts = { ready: true, readyAfterMs: 15, readyEveryMs: 15, readyProbeMs: 200, execMs: 1500 };
+  var pr1 = noLoadPlugin(priceDoc(function () { return tenP; })), wr1 = W.createWebTabs(pr1.api, rOpts), tr1 = await wr1.tabs.create({ url: 'https://a.test/' });
+  await sleep(300);
+  ok((await wr1.tabs.get(tr1.id)).status === 'complete' && wr1.earlyCount() === 1, 'R1 no load event, page shows 10 prices, stable: the tab counts as complete early'); wr1.dispose();
+  var pr2 = noLoadPlugin(priceDoc(function () { return '\u20b9100 \u20b9200 \u20b9300 text'; })), wr2 = W.createWebTabs(pr2.api, rOpts), tr2 = await wr2.tabs.create({ url: 'https://a.test/' });
+  await sleep(300);
+  ok((await wr2.tabs.get(tr2.id)).status === 'loading' && wr2.earlyCount() === 0 && pr2.execs >= 3, 'R2 only 3 price amounts (below the minimum): keeps waiting for the real load event, exactly as before'); wr2.dispose();
+  var calls3 = 0, pr3 = noLoadPlugin(priceDoc(function () { calls3++; return new Array(Math.min(calls3 * 3, 12) + 1).join('\u20b9500 ').trim(); })), wr3 = W.createWebTabs(pr3.api, rOpts), tr3 = await wr3.tabs.create({ url: 'https://a.test/' });
+  await sleep(500);
+  ok((await wr3.tabs.get(tr3.id)).status === 'complete' && calls3 >= 5 && calls3 <= 8, 'R3 a list that is still growing (3, 6, 9, 12 prices) is not read until the count stops changing (probes: ' + calls3 + ')'); wr3.dispose();
+  var pr4 = noLoadPlugin(priceDoc(function () { return tenP; })), wr4 = W.createWebTabs(pr4.api, { readyAfterMs: 15, readyEveryMs: 15 }), tr4 = await wr4.tabs.create({ url: 'https://a.test/' });
+  await sleep(150);
+  ok((await wr4.tabs.get(tr4.id)).status === 'loading' && pr4.execs === 0, 'R4 without the ready option nothing changes: no probe, still waits for the load event'); wr4.dispose();
+  var pr5 = mockPlugin({ doc: priceDoc(function () { return tenP; }) }), wr5 = W.createWebTabs(pr5.api, { ready: true, readyAfterMs: 30, readyEveryMs: 15, execMs: 1500 }), fired5 = 0;
+  wr5.tabs.onUpdated.addListener(function () { fired5++; }); var tr5 = await wr5.tabs.create({ url: 'https://a.test/' });
+  await sleep(200);
+  ok((await wr5.tabs.get(tr5.id)).status === 'complete' && fired5 === 1 && pr5.execs === 0 && wr5.earlyCount() === 0, 'R5 the real load event wins: complete once, no probe was run, not counted as early'); wr5.dispose();
+  var pr6 = noLoadPlugin(priceDoc(function () { return '\u20b91'; })), wr6 = W.createWebTabs(pr6.api, rOpts), tr6 = await wr6.tabs.create({ url: 'https://a.test/' });
+  await sleep(100); var ex6 = pr6.execs; await wr6.tabs.remove(tr6.id); await sleep(30); var ex6b = pr6.execs; await sleep(120);
+  ok(ex6 >= 2 && pr6.execs <= ex6b, 'R6 closing the tab stops the probes'); wr6.dispose();
+  if (fxSnap) {
+    var onlyAz = { Myntra: false, Ajio: false, Nykaa: false, Meesho: false, 'Tata CLiQ': false, Croma: false, 'Reliance Digital': false, Flipkart: false };
+    var pr7 = noLoadPlugin(priceDoc(function () { return tenP; })), wr7 = W.createWebTabs(pr7.api, rOpts), t7 = Date.now();
+    var or7 = await R.runAll(wr7, { query: 'x', enabled: onlyAz, foreground: false, rereads: 0, loadMs: 4000, settleMs: 0, rereadMs: 0, collect: pageSnap, maxTabs: 1, perStoreMs: 6000, retryTimeouts: false });
+    var az7 = or7.runs.filter(function (r) { return r.store === 'Amazon'; })[0];
+    ok(az7 && az7.state === 'ok' && az7.ms < 1500 && Date.now() - t7 < 2000 && wr7.earlyCount() === 1, 'R7 real runner: a store whose load event never comes is read in ' + (az7 && az7.ms) + ' ms, not after the 4000 ms load limit'); wr7.dispose();
+  }
+  ok(/createWebTabs\(pluginApi\(\), \{ ready: true \}\)/.test(appjs) && (appjs.match(/\{ ready: true \}/g) || []).length === 4 && /function readyCount/.test(read('src/webtabs.js')), 'R8 app turns the ready option on for all four webtabs objects (first pass, second try, slow read, rescue)');
+
+  // L: S15b (D-097) premium look: bigger type, glow, trust strip, stronger cards. Every claim on the screen is checked against the real code.
+  var SMq = require('./src/storemap.js'), cssL = read('www/app.css'), htmlL = read('www/index.html');
+  ok(/\.hero h1\{font-size:clamp\(34px,10\.6vw,50px\)/.test(cssL) && /\.hero \.lead\{[^}]*font-size:17px/.test(cssL) && /min-height:62px/.test(cssL) && /\.search \.btn\{[^}]*min-height:60px/.test(cssL) && /\.bnum\{font-size:38px/.test(cssL) && /\.card h3\{font-size:18px/.test(cssL), 'L1 type scale is bigger (headline 34 to 50, search 62 high, button 60 high, best price 38)');
+  ok(/class="glow g1"/.test(htmlL) && /class="glow g2"/.test(htmlL) && /<span class="hl">lowest price<\/span>/.test(htmlL) && /\.hl\{color:#FCD34D/.test(cssL) && /\.glow\{position:absolute/.test(cssL), 'L2 hero has the two soft glows and the highlighted headline words');
+  ok((htmlL.match(/<ul class="trust">[\s\S]*?<\/ul>/) || [''])[0].split('<li>').length === 4 && /\.trustwrap\{[^}]*margin-top:-30px/.test(cssL) && /\.trust\{[^}]*box-shadow/.test(cssL), 'L3 trust strip with 3 points overlaps the hero');
+  var skipPhone = SMq.pick('iPhone 17 Pro', R.STORES).skip, skipShoe = SMq.pick('Red Tape shoes for men', R.STORES).skip;
+  ok(skipPhone.ajio && skipPhone.nykaa && skipShoe.croma && skipShoe.reliancedigital && /skips fashion stores/.test(htmlL) && /skips electronics stores/.test(htmlL), 'L4 the claim "a phone search skips fashion stores, a shoe search skips electronics stores" is what storemap really does');
+  ok(!/background:linear-gradient\([^)]*#14917F/.test(cssL) && /\.go\{[^}]*linear-gradient\(180deg,var\(--teal\),var\(--teal-dark\)\)/.test(cssL) && /\.steps \.n\{[^}]*linear-gradient\(160deg,var\(--teal\),var\(--teal-dark\)\)/.test(cssL), 'L5 white text on the green buttons and step badges stays on teal or darker (contrast 5.47 or more, measured)');
   console.log('test_app: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
 })();

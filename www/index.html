@@ -16,9 +16,9 @@
   </button>
   <span class="tag">Ek Click, Best Deal</span>
 </div></header>
-<section class="hero"><div class="wrap">
+<section class="hero"><span class="glow g1" aria-hidden="true"></span><span class="glow g2" aria-hidden="true"></span><div class="wrap">
   <p class="eyebrow">Price comparison for India</p>
-  <h1>Find the lowest price, store by store</h1>
+  <h1>Find the <span class="hl">lowest price</span>, store by store</h1>
   <p class="lead">SmartSetu opens only the stores that sell your product and lines their prices up, side by side.</p>
   <form id="form" class="search" autocomplete="off">
     <label for="q" class="sr">What do you want to buy?</label>
@@ -28,9 +28,15 @@
     </div>
     <button id="go" class="btn" type="submit">Compare</button>
   </form>
+  <p class="try">Try one of these</p>
   <div class="chips" aria-label="Examples"><button type="button" class="chip" data-q="iPhone 17 Pro">iPhone 17 Pro</button><button type="button" class="chip" data-q="boAt Airdopes 141">boAt Airdopes 141</button><button type="button" class="chip" data-q="Red Tape shoes for men">Red Tape shoes</button><button type="button" class="chip" data-q="Ponds cream">Ponds cream</button></div>
   <p class="privacy"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="2"/><path d="M8 11V8a4 4 0 018 0v3" fill="none" stroke="currentColor" stroke-width="2"/></svg><span>Stores open only when you press Compare. Nothing is sent to our servers; the results stay on your phone.</span></p>
 </div></section>
+<section class="wrap trustwrap"><ul class="trust">
+  <li><span class="ti"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 9l1.5-5h13L20 9M4 9v10h16V9M4 9h16M9 19v-5h6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg></span><span><strong>Only the right stores</strong><span class="sm">A phone search skips fashion stores, a shoe search skips electronics stores.</span></span></li>
+  <li><span class="ti"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M13 3L5 14h6l-1 7 8-11h-6l1-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span><strong>Prices as each store finishes</strong><span class="sm">The first prices show in seconds, you do not wait for the slowest store.</span></span></li>
+  <li><span class="ti"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 018 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span><span><strong>Private</strong><span class="sm">Your searches and results stay on your phone.</span></span></li>
+</ul></section>
 <main class="wrap">
   <p id="msg" class="msg" role="status" aria-live="polite"></p>
   <section id="progress" class="card" hidden aria-label="Store progress">

@@ -30,9 +30,14 @@ function diagLines(label, d) {
   return [label, 'Title: ' + (d.title || '(none)'), 'Page: ' + (d.url || '(none)'), 'Price-like items: ' + (Number(d.items) || 0), 'Text: ' + (d.text || '(none)')];
 }
 
+// Page function (self-contained, runs inside the store page): how many price amounts the page text shows right now. Reads nothing else, sends nothing.
+function readyCount() { try { var t = String((document.body && document.body.innerText) || ''), m = t.match(/(?:\u20b9|Rs\.?)\s?\d[\d,]*/g); return m ? m.length : 0; } catch (e) { return 0; } }
+
 function createWebTabs(plugin, o) {
   o = o || {};
   var execMs = o.execMs == null ? 45000 : o.execMs;
+  // S15b (D-097, ALL stores): o.ready = true. A page whose load event never comes (Tata CLiQ on the phone, 'load event NO', V-212; Ajio and others sometimes) is not waited for the full limit: when the page text shows at least readyMin price amounts and the count stays the same on two checks in a row, the tab counts as complete. The real load event, when it comes first, wins. Without o.ready nothing changes.
+  var readyOn = o.ready === true, readyAfter = o.readyAfterMs == null ? 3000 : o.readyAfterMs, readyEvery = o.readyEveryMs == null ? 1500 : o.readyEveryMs, readyMin = o.readyMin == null ? 6 : o.readyMin, readyProbeMs = o.readyProbeMs == null ? 3000 : o.readyProbeMs, readyStops = {}, earlyIds = {};
   var listeners = [], pending = {}, loaded = {}, current = null, opening = false, earlyLoad = false, seq = 0, unsubs = [], inited = null, probe = o.probe === true, lastProbe = null, opened = {};
 
   function onMsg(ev) {
@@ -58,19 +63,39 @@ function createWebTabs(plugin, o) {
     Object.keys(pending).forEach(function (k) { var p = pending[k]; if (tabId == null || p.tabId === tabId) { delete pending[k]; clearTimeout(p.timer); p.reject(new Error(why)); } });
   }
 
+  function stopReady(id) { var f = readyStops[id]; if (f) { delete readyStops[id]; f(); } }
+  function startReady(id) {
+    var last = -1, stopped = false, timer = null;
+    readyStops[id] = function () { stopped = true; clearTimeout(timer); };
+    function next() { if (!stopped) timer = setTimeout(step, readyEvery); }
+    function step() {
+      if (stopped || loaded[id]) { stopReady(id); return; }
+      var done = false, guard = setTimeout(function () { if (!done) { done = true; next(); } }, readyProbeMs); // a probe that gets no answer never blocks the next one
+      scripting.executeScript({ target: { tabId: id }, func: readyCount }).then(function (r) {
+        if (done) return; done = true; clearTimeout(guard);
+        if (stopped || loaded[id]) { stopReady(id); return; }
+        var n = Number(r && r[0] && r[0].result) || 0, steady = n >= readyMin && n === last; last = n;
+        if (steady) { loaded[id] = true; earlyIds[id] = 1; stopReady(id); listeners.slice().forEach(function (l) { try { l(id, { status: 'complete' }); } catch (_) {} }); return; }
+        next();
+      }, function () { if (done) return; done = true; clearTimeout(guard); next(); });
+    }
+    timer = setTimeout(step, readyAfter);
+  }
+
   var tabs = {
     create: function (spec) {
       return init().then(function () {
         opening = true; earlyLoad = false; lastProbe = null;
         return Promise.resolve(plugin.open({ url: spec.url, visible: !!spec.active })).then(function (id) {
           current = id; loaded[id] = earlyLoad; opening = false; if (id != null) opened[id] = 1;
+          if (readyOn && id != null && !earlyLoad) startReady(id);
           return { id: id, status: earlyLoad ? 'complete' : 'loading' };
         }, function (e) { opening = false; throw e; });
       });
     },
     get: function (id) { return Promise.resolve({ id: id, status: loaded[id] ? 'complete' : 'loading' }); },
     remove: function (id) {
-      failPending(id, 'tab closed');
+      failPending(id, 'tab closed'); stopReady(id);
       if (current === id) current = null;
       delete loaded[id]; delete opened[id];
       return Promise.resolve(plugin.close({ id: id }));
@@ -116,12 +141,12 @@ function createWebTabs(plugin, o) {
   };
 
   function dispose() {
-    failPending(null, 'closed');
+    failPending(null, 'closed'); Object.keys(readyStops).forEach(stopReady);
     Object.keys(opened).forEach(function (k) { try { Promise.resolve(plugin.close({ id: k })).catch(function () {}); } catch (_) {} }); opened = {}; // S14-1d: no page is left open after a run
     unsubs.forEach(function (u) { try { if (typeof u === 'function') u(); } catch (_) {} });
     unsubs = []; inited = null; listeners = [];
   }
-  return { tabs: tabs, scripting: scripting, dispose: dispose, lastProbe: function () { return lastProbe; } };
+  return { tabs: tabs, scripting: scripting, dispose: dispose, lastProbe: function () { return lastProbe; }, earlyCount: function () { return Object.keys(earlyIds).length; } };
 }
 
 // ---- S14-1c data build (D-083): second try with a Chrome identity, page structure of still-empty stores, offers read from one product page per store.
@@ -483,7 +508,7 @@ function rescueLines(label, run) {
   return out;
 }
 
-var api = { createWebTabs: createWebTabs, detailOf: detailOf, enabledMap: enabledMap, lineText: lineText, diagLines: diagLines, OFF_TEXT: OFF_TEXT, NOCARDS_NOTE: NOCARDS_NOTE,
+var api = { readyCount: readyCount, createWebTabs: createWebTabs, detailOf: detailOf, enabledMap: enabledMap, lineText: lineText, diagLines: diagLines, OFF_TEXT: OFF_TEXT, NOCARDS_NOTE: NOCARDS_NOTE,
   sameSite: sameSite, failingLabels: failingLabels, enabledOnly: enabledOnly, mergeRuns: mergeRuns, pickProduct: pickProduct, pickFromView: pickFromView, rowsOf: rowsOf, readPage: readPage,
   offerProbe: offerProbe, structureProbe: structureProbe, offerLines: offerLines, structLines: structLines, buildReport: buildReport,
   timedOutLabels: timedOutLabels, listingLines: listingLines, scrollPage: scrollPage, slowRead: slowRead, isTileLine: isTileLine,
