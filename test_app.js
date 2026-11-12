@@ -257,7 +257,7 @@ function pageUndef() { return undefined; }
   W.mergeRuns(outM, { runs: [sH] });
   ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
   var appH = read('src/app.js');
-  ok(/VERSION = '0\.10\.1'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /run\.slow \? '3rd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try, 3rd-try label, one runAll inside runStores, 2 callers');
+  ok(/VERSION = '0\.10\.3'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /run\.slow \? '3rd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try, 3rd-try label, one runAll inside runStores, 2 callers');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -388,7 +388,7 @@ function pageUndef() { return undefined; }
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.10.1' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.1, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
+  ok(pkg.version === '0.10.3' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.3, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 1 && (appjs.match(/runStores\(/g) || []).length === 3 && appjs.indexOf('await runStores(') > appjs.indexOf('async function startRun') && (appjs.match(/startRun\(/g) || []).length === 3 && /addEventListener\('submit', onSubmit\)/.test(appjs) && /getElementById\('morebtn'\)|\$\('morebtn'\)\.addEventListener\('click'/.test(appjs), 'D5 stores start only inside startRun, reached only from the Compare submit or the also-check tap (D-010)');
@@ -432,7 +432,7 @@ function pageUndef() { return undefined; }
   ok(html.indexOf('href="compare.css"') >= 0 && html.indexOf('href="app.css"') > html.indexOf('href="compare.css"') && html.indexOf('name="theme-color"') > 0 && /id="pbar"[^>]*role="progressbar"/.test(html) && html.indexOf('id="pcount"') > 0 && html.indexOf('id="pfill"') > 0, 'U11 index.html loads app.css after compare.css, has the progress bar and theme colour');
   ok(!/https?:\/\//.test(css) && !/https?:\/\/(?!www\.w3\.org)/.test(html) && !/@import/.test(css) && !/url\((?!fonts\/Inter-(Regular|Medium|Bold)\.woff2\))/.test(css), 'U12 app.css and index.html call no other host (only the 3 bundled Inter files)');
   ok(/prefers-reduced-motion/.test(css) && cmpCss.indexOf('.ic') < 0, 'U13 reduced motion respected, shared compare.css left alone');
-  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.1'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
+  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.3'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
   function pngSize(f) { var b = fs.readFileSync(f); return b.slice(0, 8).toString('hex') === '89504e470d0a1a0a' ? [b.readUInt32BE(16), b.readUInt32BE(20)] : null; }
   var resDir = path.join(__dirname, 'resources', 'android', 'res'), fgS = { mdpi: 108, hdpi: 162, xhdpi: 216, xxhdpi: 324, xxxhdpi: 432 }, lgS = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
   var iconsOk = Object.keys(fgS).every(function (d) {
