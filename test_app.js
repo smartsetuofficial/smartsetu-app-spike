@@ -229,7 +229,7 @@ function pageUndef() { return undefined; }
   ok(lh3[0] === 'Store Amazon: 8 cards read, 1 parsed, skipped: sponsored_or_ad 7' && lh3[1] === '- in result | \u20b9129,900 | slug | T' && lh3.filter(function (l) { return /^- skipped ad \| /.test(l); }).length === 5 && lh3[2] === '- skipped ad | Sponsored Apple iPhone 17 Pro 0', 'H3 listingLines: skipped reasons, price format, at most 5 skipped ads with plain text');
   var many = []; for (var iM = 0; iM < 40; iM++) many.push({ url: 'https://www.amazon.in/dp/B' + iM, priceNow: 100 + iM, titleSource: 'card', title: 'Item ' + iM });
   var lhM = W.listingLines([{ store: 'Amazon', snapshot: { cards: [] } }], [], function () { return { cards: many, skipped: {} }; });
-  ok(lhM.length === 31 && lhM[0] === 'Store Amazon: 0 cards read, 40 parsed, skipped: none' && /Item 29$/.test(lhM[30]), 'H3b listingLines: at most 30 listings per store, the header still gives the real count');
+  ok(lhM.length === 32 && /^- cheapest card html /.test(lhM[31]) && lhM[0] === 'Store Amazon: 0 cards read, 40 parsed, skipped: none' && /Item 29$/.test(lhM[30]), 'H3b listingLines: at most 30 listings per store, the header still gives the real count');
   ok(W.listingLines([{ store: 'X', snapshot: { cards: [] } }], [], function () { throw new Error('bad'); }).join('|') === 'Store X: could not parse (bad)' && W.listingLines(null, null, stub).length === 0, 'H4 listingLines: a parser error becomes one line, no runs gives nothing');
   var rH = W.buildReport({ version: '0.7.0', query: 'q', runs: [{ store: 'Croma', state: 'timeout', ms: 110000, stage: 'reading', stageMs: 41000, loaded: true, slow: true, retried: true }, { store: 'Nykaa', state: 'error', ms: 3000, error: 'no answer\nfrom page', loaded: false }, { store: 'Amazon', state: 'ok', cards: 3, ms: 9000, rereads: 1 }], rows: [], listings: ['Store Amazon: 3 cards read, 3 parsed, skipped: none', '- in result | x'] });
   ok(/- Croma \| timeout \| - \| 110 \| 3rd try \(long wait \+ scroll, desktop identity\) \| stopped at: reading \(41 s in that step\) \| page loaded: yes/.test(rH) && /- Nykaa \| error \| - \| 3 \| 1st \| page loaded: no \| error: no answer from page/.test(rH) && /- Amazon \| ok \| 3 \| 9 \| 1st \| rereads: 1/.test(rH) && /ALL LISTINGS READ[^\n]*\nStore Amazon: 3 cards read[^]*\n- in result \| x\n\nDIAGNOSTIC/.test(rH) && /ALL LISTINGS READ[^\n]*\n- \(none\)/.test(W.buildReport({ runs: [] })), 'H5 buildReport: stage and error of a failed store, 3rd try label, ALL LISTINGS section before DIAGNOSTIC');
@@ -257,7 +257,7 @@ function pageUndef() { return undefined; }
   W.mergeRuns(outM, { runs: [sH] });
   ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
   var appH = read('src/app.js');
-  ok(/VERSION = '0\.10\.3'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /run\.slow \? '3rd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try, 3rd-try label, one runAll inside runStores, 2 callers');
+  ok(/VERSION = '0\.10\.4'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && /run\.slow \? '3rd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try, 3rd-try label, one runAll inside runStores, 2 callers');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -388,7 +388,7 @@ function pageUndef() { return undefined; }
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.10.3' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.3, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
+  ok(pkg.version === '0.10.4' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.4, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 1 && (appjs.match(/runStores\(/g) || []).length === 3 && appjs.indexOf('await runStores(') > appjs.indexOf('async function startRun') && (appjs.match(/startRun\(/g) || []).length === 3 && /addEventListener\('submit', onSubmit\)/.test(appjs) && /getElementById\('morebtn'\)|\$\('morebtn'\)\.addEventListener\('click'/.test(appjs), 'D5 stores start only inside startRun, reached only from the Compare submit or the also-check tap (D-010)');
@@ -432,7 +432,7 @@ function pageUndef() { return undefined; }
   ok(html.indexOf('href="compare.css"') >= 0 && html.indexOf('href="app.css"') > html.indexOf('href="compare.css"') && html.indexOf('name="theme-color"') > 0 && /id="pbar"[^>]*role="progressbar"/.test(html) && html.indexOf('id="pcount"') > 0 && html.indexOf('id="pfill"') > 0, 'U11 index.html loads app.css after compare.css, has the progress bar and theme colour');
   ok(!/https?:\/\//.test(css) && !/https?:\/\/(?!www\.w3\.org)/.test(html) && !/@import/.test(css) && !/url\((?!fonts\/Inter-(Regular|Medium|Bold)\.woff2\))/.test(css), 'U12 app.css and index.html call no other host (only the 3 bundled Inter files)');
   ok(/prefers-reduced-motion/.test(css) && cmpCss.indexOf('.ic') < 0, 'U13 reduced motion respected, shared compare.css left alone');
-  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.3'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
+  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.4'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
   function pngSize(f) { var b = fs.readFileSync(f); return b.slice(0, 8).toString('hex') === '89504e470d0a1a0a' ? [b.readUInt32BE(16), b.readUInt32BE(20)] : null; }
   var resDir = path.join(__dirname, 'resources', 'android', 'res'), fgS = { mdpi: 108, hdpi: 162, xhdpi: 216, xxhdpi: 324, xxxhdpi: 432 }, lgS = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
   var iconsOk = Object.keys(fgS).every(function (d) {
@@ -522,6 +522,11 @@ function pageUndef() { return undefined; }
   var skipPhone = SMq.pick('iPhone 17 Pro', R.STORES).skip, skipShoe = SMq.pick('Red Tape shoes for men', R.STORES).skip;
   ok(skipPhone.ajio && skipPhone.nykaa && skipShoe.croma && skipShoe.reliancedigital && /skips fashion stores/.test(htmlL) && /skips electronics stores/.test(htmlL), 'L4 the claim "a phone search skips fashion stores, a shoe search skips electronics stores" is what storemap really does');
   ok(!/background:linear-gradient\([^)]*#14917F/.test(cssL) && /\.go\{[^}]*linear-gradient\(180deg,var\(--teal\),var\(--teal-dark\)\)/.test(cssL) && /\.steps \.n\{[^}]*linear-gradient\(160deg,var\(--teal\),var\(--teal-dark\)\)/.test(cssL), 'L5 white text on the green buttons and step badges stays on teal or darker (contrast 5.47 or more, measured)');
+  // S18b (V-298): the store test report shows the cut html of the cheapest listing of every store
+  var runsC = [{ store: 'Flipkart', snapshot: { cards: [{ link: 'https://www.flipkart.com/a/p/itm1', html: '<a href="https://www.flipkart.com/a/p/itm1">Mixer A \u20B91,340 \u20B92,999</a>' }, { link: 'https://www.flipkart.com/b/p/itm2', html: '<a href="https://www.flipkart.com/b/p/itm2">Mixer B \u20B93,000 \u20B94,000</a>' }] } }];
+  var lc = W.listingLines(runsC, [], function (snap) { return { cards: [{ url: 'https://www.flipkart.com/a/p/itm1', priceNow: 1340, mrp: 2999, title: 'Mixer A', notes: ['tiny_amount_ignored'] }, { url: 'https://www.flipkart.com/b/p/itm2', priceNow: 3000, mrp: 4000, title: 'Mixer B', notes: [] }], skipped: {} }; });
+  var ch = lc.filter(function (l) { return /^- cheapest card html /.test(l); });
+  ok(ch.length === 1 && /1,340/.test(ch[0]) && /tiny_amount_ignored/.test(ch[0]) && /Mixer A/.test(ch[0]) && /itm1/.test(ch[0]), 'R1 report: one cheapest-card html line per store with price, MRP, notes and the cut html');
   console.log('test_app: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
 })();

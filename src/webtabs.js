@@ -389,6 +389,12 @@ function listingLines(runs, rows, parse) {
     });
     var n = 0;
     cards.forEach(function (c) { if (n >= 5 || !c || !(c.sponsored || c.ad)) return; n++; out.push('- skipped ad | ' + plainText(c.html).slice(0, 90)); });
+    // S18b (V-298): the cut html of the CHEAPEST parsed listing of every store, so a wrong price (Rs 2 for a Rs 1,340 mixer) can be traced to the real card text
+    var cheap = (p.cards || []).filter(function (c) { return c.priceNow != null; }).sort(function (a, b) { return a.priceNow - b.priceNow; })[0];
+    if (cheap) {
+      var rawC = cards.filter(function (x) { return x && normUrl(x.link) === normUrl(cheap.url); })[0];
+      out.push('- cheapest card html | ' + money(cheap.priceNow) + (cheap.mrp ? ' (MRP ' + money(cheap.mrp) + ')' : '') + ' | ' + (cheap.notes || []).join(',') + ' | ' + String(cheap.title || '(no title)').slice(0, 60) + ' | ' + (rawC ? String(rawC.html || '').replace(/\s+/g, ' ').slice(0, 1200) : '(raw card not found for this listing)'));
+    }
   });
   return out;
 }
