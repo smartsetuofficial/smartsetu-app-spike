@@ -386,6 +386,8 @@ function listingLines(runs, rows, parse) {
       if (np >= 2 || c.priceNow != null) return;
       var raw = cards.filter(function (x) { return x && normUrl(x.link) === normUrl(c.url); })[0]; np++;
       out.push('- no-price card html ' + np + ' | ' + String(c.title || '(no title)').slice(0, 60) + ' | ' + (raw ? String(raw.html || '').replace(/\s+/g, ' ').slice(0, 1200) : '(raw card not found for this listing)'));
+      var rh = raw ? String(raw.html || '').replace(/\s+/g, ' ') : '', pi = rh.search(/a-price|a-offscreen|\u20B9|&#8377;|price/i);
+      out.push('- no-price price-region ' + np + ' | ' + (pi >= 0 ? 'html around the first price word (char ' + pi + '): ' + rh.slice(Math.max(0, pi - 150), pi + 650) : 'no price word anywhere in the card html'));
     });
     var n = 0;
     cards.forEach(function (c) { if (n >= 5 || !c || !(c.sponsored || c.ad)) return; n++; out.push('- skipped ad | ' + plainText(c.html).slice(0, 90)); });
