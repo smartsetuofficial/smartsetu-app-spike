@@ -25,6 +25,7 @@ async function runFull(env, log) {
   var notes = [], fast = [], struct = [], rescue = [], listings = [], rows = [], runs = [], tabs = null, tabs2 = null, err = null;
   var pickInfo = M.pick(q, R.STORES);
   notes.push('Category pick: ' + (pickInfo.cats.join(', ') || 'none (every store is checked)') + ' | would open: ' + pickInfo.keys.join(', ') + ' | would skip: ' + (Object.keys(pickInfo.skip).join(', ') || 'none') + ' (this test opens ALL stores)');
+  try { var pq = env.SmartSetu.query.parse(q); notes.push('ENGINE: query v' + env.SmartSetu.query.version + ' | parser v' + env.SmartSetu.parser.version + ' | app ' + (env.version || '?') + ' | parsed ' + JSON.stringify({ kidsQ: pq.kidsQ, sub: pq.sub, gender: pq.gender, age: pq.age, cat: pq.cat && pq.cat.term, winter: pq.winter, extras: pq.extras, models: pq.models, maxPrice: pq.maxPrice })); } catch (e) { notes.push('ENGINE line failed: ' + String(e && e.message).slice(0, 80)); }
   try {
     log('Step 1 of 3: fast read of every store...');
     var nf = env.NF.makeFetch(env.http, ua), fr = env.fetchRead;
@@ -44,6 +45,7 @@ async function runFull(env, log) {
     var out = await R.runAll(tabs, { query: q, enabled: {}, foreground: false, rereads: 2, rereadMs: 2500, collect: env.collect, maxTabs: 1, perStoreMs: 50000, retryTimeouts: false, onUpdate: function (r) { log('Step 2 of 3: ' + r.store + ' ' + r.state); } });
     runs = out.runs;
     var res = env.SmartSetu.compareAny({ query: q, searches: out.snapshots, products: [], seenAt: out.seenAt }), view = V.buildView(res, runs, out.seenAt);
+    try { var tc = {}; (res.quarantine || []).forEach(function (x) { var k = tc[x.store] = tc[x.store] || { t3: 0, t2: 0, miss: 0 }; if (x.tier === 3) k.t3++; else if (x.tier === 2) { k.t2++; if (x.miss) k.miss++; } }); notes.push('TIERS per store (tier 3 / tier 2 / tier 2 close) ' + JSON.stringify(tc) + ' | counts ' + JSON.stringify(res.counts) + ' | similar ' + JSON.stringify(res.similar && res.similar.counts)); } catch (_) {}
     try { rows = (W.rowsOf(view) || []).map(function (r) { return { store: r.store, price: r.price, title: r.title }; }); } catch (_) {}
     try { listings = W.listingLines(runs, W.rowsOf(view), env.SmartSetu.parseSearch); } catch (e) { listings = ['(listing lines failed: ' + String(e && e.message).slice(0, 80) + ')']; }
     log('Step 3 of 3: page structure of every store that gave no listings...');

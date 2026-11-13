@@ -76,13 +76,14 @@
     s.stores.forEach(function (st) {
       v.groups.push({
         title: storeName(st.store), stores: [storeName(st.store)], comparable: false, label: null,
-        note: 'Showing ' + st.shown + ' of ' + st.total + ' listings, cheapest first.',
-        rows: st.items.map(function (m) { return row(storeName(st.store), m.title, m.url, m.pricePaise, null, m.availability, false); })
+        note: st.total > 0 ? 'Showing ' + st.shown + ' of ' + st.total + ' listings, cheapest first.' : 'No exact match here. Close matches are listed below.',
+        rows: st.items.map(function (m) { var r = row(storeName(st.store), m.title, m.url, m.pricePaise, null, m.availability, false); if (m.low) r.note = 'Much cheaper than the other listings. Check it before you buy (it may be a part or an accessory). Not counted as the lowest.'; return r; })
       });
     });
     // Step 2b: the cheapest listing each store showed, side by side. Different products, so not ranked and no best claim (D-061, D-024).
     var topRows = [];
-    s.stores.forEach(function (st) { var m = st.items && st.items[0]; if (m) topRows.push(row(storeName(st.store), m.title, m.url, m.pricePaise, null, m.availability, false)); });
+    s.stores.forEach(function (st) { var m = st.cheapest !== undefined ? st.cheapest : (st.items && st.items[0]); if (m) topRows.push(row(storeName(st.store), m.title, m.url, m.pricePaise, null, m.availability, false)); });
+    s.stores.forEach(function (st) { if (st.close && st.close.length) v.groups.push({ title: storeName(st.store) + ': close matches', stores: [storeName(st.store)], comparable: false, label: null, note: 'These may not match every part of your search (for example the material). Check the listing before you buy.', rows: st.close.map(function (m) { return row(storeName(st.store), m.title, m.url, m.pricePaise, null, m.availability, false); }) }); });
     if (topRows.length >= 2) v.top = { title: 'Lowest listed price per store', note: 'The cheapest listing each store showed. These are different products, so they are not ranked against each other.', rows: topRows };
     return v;
   }
