@@ -359,7 +359,7 @@ function buildReport(p) {
   L.push('', 'RESULT ROWS (store | price | title)');
   (p.rows || []).forEach(function (r) { L.push('- ' + r.store + ' | ' + (r.price || '-') + ' | ' + String(r.title || '').slice(0, 70)); });
   if (!(p.rows || []).length) L.push('- (none)');
-  [['ALL LISTINGS READ (per store: in result or not | price | where the title came from | title)', p.listings], ['DIAGNOSTIC', p.diag], ['PAGE STRUCTURE', p.struct], ['CARD RESCUE (S14-1g)', p.rescue], ['OFFERS FROM PRODUCT PAGES', p.offers]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
+  [['DIAGNOSTIC', p.diag], ['ALL LISTINGS READ (per store: in result or not | price | where the title came from | title)', p.listings], ['PAGE STRUCTURE', p.struct], ['CARD RESCUE (S14-1g)', p.rescue], ['OFFERS FROM PRODUCT PAGES', p.offers]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
   return L.join('\n');
 }
 
@@ -368,6 +368,8 @@ function timedOutLabels(runs) { return (runs || []).filter(function (r) { return
 function normUrl(u) { try { var x = new URL(u); return x.hostname.replace(/^www\./, '') + x.pathname; } catch (_) { return String(u || '').split('?')[0]; } }
 function plainText(html) { return String(html || '').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim(); }
 function money(n) { return '\u20b9' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g, ','); }
+// S18f (V-307): the report must stay short enough to paste in one message: the html around the first price word, not the start of the card
+function regionOf(html, n) { var t = String(html || '').replace(/\s+/g, ' '), i = t.search(/a-price|a-offscreen|\u20B9|&#8377;|price/i); return i >= 0 ? '...' + t.slice(Math.max(0, i - 100), i + n) : t.slice(0, n); }
 // Pure. One block per store that gave a snapshot: header (cards read, parsed, skipped by reason), every parsed listing (in result or not | price | title source | title, max 30), up to 5 skipped ads with their text. parse = SmartSetu.parseSearch (the same parser for every store).
 function listingLines(runs, rows, parse) {
   var inRes = {}, out = [];
@@ -385,9 +387,9 @@ function listingLines(runs, rows, parse) {
     (p.cards || []).forEach(function (c) {
       if (np >= 2 || c.priceNow != null) return;
       var raw = cards.filter(function (x) { return x && normUrl(x.link) === normUrl(c.url); })[0]; np++;
-      out.push('- no-price card html ' + np + ' | ' + String(c.title || '(no title)').slice(0, 60) + ' | ' + (raw ? String(raw.html || '').replace(/\s+/g, ' ').slice(0, 1200) : '(raw card not found for this listing)'));
+      out.push('- no-price card html ' + np + ' | ' + String(c.title || '(no title)').slice(0, 60) + ' | ' + (raw ? String(raw.html || '').replace(/\s+/g, ' ').slice(0, 400) : '(raw card not found for this listing)'));
       var rh = raw ? String(raw.html || '').replace(/\s+/g, ' ') : '', pi = rh.search(/a-price|a-offscreen|\u20B9|&#8377;|price/i);
-      out.push('- no-price price-region ' + np + ' | ' + (pi >= 0 ? 'html around the first price word (char ' + pi + '): ' + rh.slice(Math.max(0, pi - 150), pi + 650) : 'no price word anywhere in the card html'));
+      out.push('- no-price price-region ' + np + ' | ' + (pi >= 0 ? 'html around the first price word (char ' + pi + '): ' + rh.slice(Math.max(0, pi - 120), pi + 450) : 'no price word anywhere in the card html'));
     });
     var n = 0;
     cards.forEach(function (c) { if (n >= 5 || !c || !(c.sponsored || c.ad)) return; n++; out.push('- skipped ad | ' + plainText(c.html).slice(0, 90)); });
@@ -395,7 +397,7 @@ function listingLines(runs, rows, parse) {
     var cheap = (p.cards || []).filter(function (c) { return c.priceNow != null; }).sort(function (a, b) { return a.priceNow - b.priceNow; })[0];
     if (cheap) {
       var rawC = cards.filter(function (x) { return x && normUrl(x.link) === normUrl(cheap.url); })[0];
-      out.push('- cheapest card html | ' + money(cheap.priceNow) + (cheap.mrp ? ' (MRP ' + money(cheap.mrp) + ')' : '') + ' | ' + (cheap.notes || []).join(',') + ' | ' + String(cheap.title || '(no title)').slice(0, 60) + ' | ' + (rawC ? String(rawC.html || '').replace(/\s+/g, ' ').slice(0, 1200) : '(raw card not found for this listing)'));
+      out.push('- cheapest card html | ' + money(cheap.priceNow) + (cheap.mrp ? ' (MRP ' + money(cheap.mrp) + ')' : '') + ' | ' + (cheap.notes || []).join(',') + ' | ' + String(cheap.title || '(no title)').slice(0, 60) + ' | ' + (rawC ? regionOf(rawC.html, 450) : '(raw card not found for this listing)'));
     }
   });
   return out;
