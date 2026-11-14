@@ -392,7 +392,7 @@ function listingLines(runs, rows, parse) {
       out.push('- no-price price-region ' + np + ' | ' + (pi >= 0 ? 'html around the first price word (char ' + pi + '): ' + rh.slice(Math.max(0, pi - 120), pi + 450) : 'no price word anywhere in the card html'));
     });
     var n = 0;
-    cards.forEach(function (c) { if (n >= 5 || !c || !(c.sponsored || c.ad)) return; n++; out.push('- skipped ad | ' + plainText(c.html).slice(0, 90)); });
+    cards.forEach(function (c) { if (n >= 30 || !c || !(c.sponsored || c.ad)) return; n++; var lk = String(c.link || ''), tx = plainText(c.html), why = []; /* S20d (V-351, every store): why each card was flagged */ if (/\/sspa\/click/i.test(lk)) why.push('link has /sspa/click'); else if (/sponsored/i.test(lk)) why.push('link has sponsored'); if (/sponsored/i.test(tx)) why.push('text has Sponsored'); if (c.ad) why.push('own line AD'); out.push('- skipped ad | #' + n + ' | why: ' + (why.join(' + ') || 'flag set by the page reader') + ' | ' + (/\u20B9\s?\d|Rs\.?\s?\d/.test(tx) ? 'has a price' : 'no price') + ' | ' + tx.slice(0, 140)); });
     // S18b (V-298): the cut html of the CHEAPEST parsed listing of every store, so a wrong price (Rs 2 for a Rs 1,340 mixer) can be traced to the real card text
     var cheap = (p.cards || []).filter(function (c) { return c.priceNow != null; }).sort(function (a, b) { return a.priceNow - b.priceNow; })[0];
     if (cheap) {

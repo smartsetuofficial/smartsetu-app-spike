@@ -11,7 +11,7 @@ var M = require('./storemap.js');
 var NF = require('./nativefetch.js');
 var Dev = require('./devtest.js');
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.9';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.10';
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = { Croma: 'Not available yet' };
 function $(id) { return document.getElementById(id); }
