@@ -12,7 +12,7 @@ function detailOf(ev) {
 // Stores that are not read on the phone yet (shown honestly on the screen, D-078, D-081). Key = runner_core store key, label = runner_core store label.
 var OFF_TEXT = { myntra: 'No data on the phone app yet' };
 var NOCARDS_NOTE = { croma: "Croma's page asks for a pincode, so no products were shown." }; // seen on the page (V-242); the cause of the empty result stays unverified (V-243)
-function enabledMap() { return { Myntra: false }; }
+function enabledMap() { return {}; } // S20b: Myntra is on again (read through the card rescue, app.js), Croma is paused in app.js
 // view.js gives the store line text; the app adds the plain reason for a store that is off and the short error for a store that failed.
 function lineText(run, text) {
   text = String(text).replace(/(hidden|visible) tab/g, '$1 page'); // view.js says tab, the app has pages
@@ -359,7 +359,7 @@ function buildReport(p) {
   L.push('', 'RESULT ROWS (store | price | title)');
   (p.rows || []).forEach(function (r) { L.push('- ' + r.store + ' | ' + (r.price || '-') + ' | ' + String(r.title || '').slice(0, 70)); });
   if (!(p.rows || []).length) L.push('- (none)');
-  [['DIAGNOSTIC', p.diag], ['ALL LISTINGS READ (per store: in result or not | price | where the title came from | title)', p.listings], ['PAGE STRUCTURE', p.struct], ['CARD RESCUE (S14-1g)', p.rescue], ['OFFERS FROM PRODUCT PAGES', p.offers]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
+  [['DIAGNOSTIC', p.diag], ['CROMA PINCODE PROBE (read only, nothing typed)', p.croma], ['ALL LISTINGS READ (per store: in result or not | price | where the title came from | title)', p.listings], ['PAGE STRUCTURE', p.struct], ['CARD RESCUE (S14-1g)', p.rescue], ['OFFERS FROM PRODUCT PAGES', p.offers]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
   return L.join('\n');
 }
 
@@ -510,6 +510,26 @@ async function rescueRead(wt, store, query, o) {
   var snap = { v: 1, kind: 'search', query: query, url: r.url, title: r.title, time: new Date().toISOString(), metas: [], ldJson: [], cards: cards, priceBoxes: [], struckBoxes: [], clickTexts: [], offerBoxes: [], pageOfferLines: [], pageAvailLines: [], probe: 'app-rescue-0.8.0' };
   return Object.assign(base, { state: 'ok', cards: cards.length, snapshot: snap, rescue: { url: r.url, leaves: r.leaves, outcome: r.outcome, dump: [] } });
 }
+// S20b (V-318): Croma shows no products without a pincode. Read-only look at the pincode form: field names, button texts, iframe hosts. Nothing is typed or clicked.
+function pincodeProbe() {
+  var vis = function (e) { var r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  var ins = Array.prototype.slice.call(document.querySelectorAll('input,textarea,select')).slice(0, 60).map(function (e) { return { t: (e.type || e.tagName).toLowerCase(), n: (e.name || '').slice(0, 30), i: (e.id || '').slice(0, 30), p: (e.placeholder || '').slice(0, 40), a: (e.getAttribute('aria-label') || '').slice(0, 40), m: e.maxLength > 0 ? e.maxLength : 0, v: vis(e) ? 1 : 0 }; }).filter(function (x) { return x.v || /pin|zip|postal|code|deliver|loc/i.test(x.n + ' ' + x.i + ' ' + x.p + ' ' + x.a); }).slice(0, 12);
+  var bt = Array.prototype.slice.call(document.querySelectorAll('button,a,[role=button]')).map(function (e) { return (e.innerText || e.getAttribute('aria-label') || '').replace(/\s+/g, ' ').trim().slice(0, 50); }).filter(function (t) { return /pin|deliver|location|apply|submit|check|update/i.test(t); }).slice(0, 10);
+  var fr = Array.prototype.slice.call(document.querySelectorAll('iframe')).map(function (e) { try { return new URL(e.src, location.href).host + (e.id ? '#' + e.id : ''); } catch (_) { return '?'; } }).slice(0, 6);
+  var tx = (document.body ? document.body.innerText : '').replace(/\s+/g, ' '), sn = [], re = /pincode/ig, m;
+  while ((m = re.exec(tx)) && sn.length < 4) sn.push(tx.slice(Math.max(0, m.index - 40), m.index + 80));
+  return { url: location.href.slice(0, 120), inputs: ins, buttons: bt, iframes: fr, snippets: sn, dialog: !!document.querySelector('[role=dialog],[class*=modal],[class*=Modal],[class*=popup]') };
+}
+function pincodeLines(res) {
+  var r = res && res.ok && res.result;
+  if (!r) return ['Croma pincode probe: no answer' + (res && res.error ? ' (' + String(res.error).slice(0, 80) + ')' : '')];
+  var out = ['page: ' + r.url + ' | dialog or popup present: ' + (r.dialog ? 'yes' : 'no') + ' | iframes: ' + (r.iframes.join(', ') || 'none')];
+  r.inputs.forEach(function (x) { out.push('field: type ' + x.t + ' | name ' + (x.n || '-') + ' | id ' + (x.i || '-') + ' | placeholder ' + (x.p || '-') + ' | aria ' + (x.a || '-') + ' | maxlength ' + x.m + ' | visible ' + x.v); });
+  if (!r.inputs.length) out.push('field: none found');
+  r.buttons.forEach(function (t) { out.push('button or link: ' + t); });
+  r.snippets.forEach(function (t) { out.push('text near pincode: ' + t); });
+  return out;
+}
 function rescueLines(label, run) {
   var r = run && run.rescue;
   if (!r) return [label + ' rescue: ' + (run && run.error ? 'could not read (' + String(run.error).slice(0, 80) + ')' : 'no answer')];
@@ -522,5 +542,5 @@ var api = { readyCount: readyCount, createWebTabs: createWebTabs, detailOf: deta
   sameSite: sameSite, failingLabels: failingLabels, enabledOnly: enabledOnly, mergeRuns: mergeRuns, pickProduct: pickProduct, pickFromView: pickFromView, rowsOf: rowsOf, readPage: readPage,
   offerProbe: offerProbe, structureProbe: structureProbe, offerLines: offerLines, structLines: structLines, buildReport: buildReport,
   timedOutLabels: timedOutLabels, listingLines: listingLines, scrollPage: scrollPage, slowRead: slowRead, isTileLine: isTileLine,
-  cardRescue: cardRescue, rescueRead: rescueRead, rescueLines: rescueLines };
+  cardRescue: cardRescue, rescueRead: rescueRead, rescueLines: rescueLines, pincodeProbe: pincodeProbe, pincodeLines: pincodeLines };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

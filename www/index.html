@@ -3,58 +3,68 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#0B1F3A">
+<meta name="theme-color" content="#011A52">
 <title>SmartSetu - Compare prices</title>
 <link rel="stylesheet" href="compare.css">
 <link rel="stylesheet" href="app.css">
 </head>
 <body>
+<div class="herobox">
 <header class="top"><div class="wrap">
   <button id="logo" class="logo" type="button" aria-label="SmartSetu">
-    <svg class="mark" viewBox="8 8 80 80" width="46" height="46" aria-hidden="true"><rect x="8" y="8" width="80" height="80" rx="22" fill="#0F766E"/><path d="M64 28C38 28 28 38 48 48C68 58 58 68 32 68" fill="none" stroke="#FFFFFF" stroke-width="7" stroke-linecap="round"/><circle cx="66" cy="28" r="9" fill="#F59E0B"/><circle cx="30" cy="68" r="9" fill="#FFFFFF"/></svg>
-    <span class="brandcol"><span class="brand">SmartSetu</span><span class="motto">Compare • Save • Shop Smart</span></span>
+    <svg class="mark" viewBox="0 0 96 96" width="48" height="48" aria-hidden="true"><defs><linearGradient id="lg1" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#4C8DFF"/><stop offset=".55" stop-color="#1D56E8"/><stop offset="1" stop-color="#0B2F9E"/></linearGradient><linearGradient id="lg2" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFC93C"/><stop offset="1" stop-color="#F97316"/></linearGradient></defs><rect x="2" y="2" width="92" height="92" rx="24" fill="url(#lg1)"/><rect x="3.5" y="3.5" width="89" height="89" rx="22.5" fill="none" stroke="#FFFFFF" stroke-opacity=".35" stroke-width="1.5"/><path d="M66 27C36 27 26 40 48 49C70 58 60 71 30 70" fill="none" stroke="#FFFFFF" stroke-width="8" stroke-linecap="round"/><circle cx="68" cy="27" r="10" fill="url(#lg2)"/><circle cx="28" cy="70" r="10" fill="#FFFFFF"/></svg>
+    <span class="brandcol"><span class="brand">Smart<span class="bs">Setu</span></span><span class="motto">Compare &#8226; Save &#8226; Shop Smart</span></span>
   </button>
-  <span class="tag"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path d="M13 2L5 13.5h5.5L9.5 22 19 9.8h-5.6L13 2z" fill="#F59E0B"/></svg>Ek Click, Best Deal</span>
+  <span class="tag"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M13 2L5 13.5h5.5L9.5 22 19 9.8h-5.6L13 2z" fill="#FFB020"/></svg>Ek Click, Best Deal</span>
 </div></header>
-<section class="hero"><span class="glow g1" aria-hidden="true"></span><span class="glow g2" aria-hidden="true"></span><div class="wrap">
-  <svg class="art" viewBox="0 0 190 160" aria-hidden="true" focusable="false"><g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M18 62h22l14 52h84l12-38H50" stroke="#E2EEF5" stroke-width="6"/><path d="M58 128h80" stroke="#B7CAD8" stroke-width="5"/></g><circle cx="68" cy="140" r="8" fill="#E2EEF5"/><circle cx="128" cy="140" r="8" fill="#E2EEF5"/><rect x="58" y="44" width="30" height="40" rx="5" fill="#F59E0B"/><path d="M66 44c0-9 14-9 14 0" fill="none" stroke="#FCD34D" stroke-width="4"/><rect x="92" y="28" width="32" height="56" rx="5" fill="#2DD4BF"/><path d="M101 28c0-10 14-10 14 0" fill="none" stroke="#99F6E4" stroke-width="4"/><rect x="128" y="50" width="26" height="34" rx="5" fill="#FFFFFF"/><path d="M135 50c0-8 12-8 12 0" fill="none" stroke="#CBD5E1" stroke-width="4"/><circle cx="156" cy="100" r="19" fill="#F59E0B"/><text x="156" y="109" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="25" font-weight="700" fill="#0B1F3A">%</text></svg>
-  <p class="eyebrow"><svg viewBox="0 0 24 24" width="14" height="14" aria-hidden="true" focusable="false"><path d="M3 12V4h8l10 10-8 8L3 12z" fill="#F59E0B"/><circle cx="7.5" cy="8.5" r="1.6" fill="#0B1F3A"/></svg>Price comparison for India</p>
-  <h1>Find the <span class="hl">lowest price</span>, store by store</h1>
+<section class="hero"><div class="wrap">
+  <svg class="art" viewBox="0 0 190 262" aria-hidden="true" focusable="false"><defs>
+    <linearGradient id="gBlue" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#7DB0FF"/><stop offset=".55" stop-color="#2F6BFF"/><stop offset="1" stop-color="#1536A8"/></linearGradient>
+    <linearGradient id="gOr" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFC24A"/><stop offset=".6" stop-color="#F97316"/><stop offset="1" stop-color="#C2410C"/></linearGradient>
+    <linearGradient id="gGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFEF7A"/><stop offset=".6" stop-color="#F5B50A"/><stop offset="1" stop-color="#B7790A"/></linearGradient>
+    <linearGradient id="gSw" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#FFC24A" stop-opacity="0"/><stop offset=".4" stop-color="#FFB020"/><stop offset="1" stop-color="#FFFFFF" stop-opacity=".9"/></linearGradient>
+    <linearGradient id="gMetal" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#FFFFFF"/><stop offset=".5" stop-color="#D5E2F6"/><stop offset="1" stop-color="#8FA9D3"/></linearGradient>
+    <linearGradient id="gShade" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#000" stop-opacity=".0"/><stop offset="1" stop-color="#000" stop-opacity=".22"/></linearGradient></defs>
+    <path d="M8 74C58 66 128 42 190 4V30C140 62 72 92 8 100Z" fill="url(#gSw)" opacity=".95"/>
+    <ellipse cx="100" cy="248" rx="78" ry="9" fill="#000" opacity=".25"/>
+    <rect x="86" y="22" width="56" height="116" rx="9" fill="url(#gBlue)"/><rect x="86" y="22" width="56" height="116" rx="9" fill="url(#gShade)"/><path d="M99 22c0-19 30-19 30 0" fill="none" stroke="#E8F0FF" stroke-width="4.5" stroke-linecap="round"/><path d="M92 30h44" stroke="#fff" stroke-opacity=".3" stroke-width="3" stroke-linecap="round"/>
+    <rect x="20" y="76" width="64" height="90" rx="9" fill="url(#gOr)"/><rect x="20" y="76" width="64" height="90" rx="9" fill="url(#gShade)"/><path d="M37 76c0-19 30-19 30 0" fill="none" stroke="#FFE2B0" stroke-width="4.5" stroke-linecap="round"/><path d="M26 84h46" stroke="#fff" stroke-opacity=".35" stroke-width="3" stroke-linecap="round"/>
+    <rect x="120" y="62" width="54" height="102" rx="9" fill="url(#gGold)"/><rect x="120" y="62" width="54" height="102" rx="9" fill="url(#gShade)"/><path d="M132 62c0-18 30-18 30 0" fill="none" stroke="#FFF3B0" stroke-width="4.5" stroke-linecap="round"/><path d="M126 70h40" stroke="#fff" stroke-opacity=".4" stroke-width="3" stroke-linecap="round"/>
+    <g fill="none" stroke="url(#gMetal)" stroke-linecap="round" stroke-linejoin="round"><path d="M0 116h26" stroke-width="8"/><path d="M26 116h148l-15 74H46z" stroke-width="7" fill="#0A2E96" fill-opacity=".45"/><path d="M64 116l6 74M88 116l3 74M112 116v74M136 116l-4 74M33 141h134M41 166h122" stroke-width="3.2" stroke-opacity=".85"/><path d="M46 190l10 26h86" stroke-width="7"/></g>
+    <circle cx="66" cy="234" r="14" fill="#F1F6FF"/><circle cx="66" cy="234" r="14" fill="none" stroke="#7C98C8" stroke-width="2"/><circle cx="66" cy="234" r="5.5" fill="#7C98C8"/><circle cx="136" cy="234" r="14" fill="#F1F6FF"/><circle cx="136" cy="234" r="14" fill="none" stroke="#7C98C8" stroke-width="2"/><circle cx="136" cy="234" r="5.5" fill="#7C98C8"/>
+    <g transform="rotate(-9 160 172)"><path d="M148 136c4-9 20-9 22 0" fill="none" stroke="#FFD27A" stroke-width="3" stroke-linecap="round"/><rect x="132" y="142" width="56" height="68" rx="12" fill="#FFFFFF"/><rect x="132" y="142" width="56" height="68" rx="12" fill="url(#gShade)" opacity=".5"/><circle cx="160" cy="176" r="20" fill="#1D56E8"/><text x="160" y="185" text-anchor="middle" font-family="Inter,Arial,sans-serif" font-size="26" font-weight="800" fill="#fff">%</text></g></svg>
+  <p class="eyebrow"><svg viewBox="0 0 24 24" width="15" height="15" aria-hidden="true" focusable="false"><path d="M3 12V4h8l10 10-8 8L3 12z" fill="#FFB020"/><circle cx="7.5" cy="8.5" r="1.6" fill="#0B1F3A"/></svg>Price comparison for India</p>
+  <h1><span class="l1">Find the <span class="y">lowest</span></span><span class="l2"><span class="y sw">price</span>, store by</span><span class="l3">store<svg class="spark" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 2l1.8 7.2L21 11l-7.2 1.8L12 20l-1.8-7.2L3 11l7.2-1.8z" fill="#FFB020"/></svg></span></h1>
   <p class="lead">SmartSetu opens only the stores that sell your product and lines their prices up, side by side.</p>
   <form id="form" class="search" autocomplete="off">
     <label for="q" class="sr">What do you want to buy?</label>
     <div class="field">
-      <svg class="sico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2"/><path d="M20 20l-4-4" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+      <svg class="sico" viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="11" cy="11" r="7" fill="none" stroke="currentColor" stroke-width="2.2"/><path d="M20 20l-4-4" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/></svg>
       <input id="q" type="search" placeholder="Search a product or model" maxlength="120" enterkeyhint="search" required>
+      <button id="qclear" class="qclear" type="button" aria-label="Clear" hidden><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#4B5C86"/><path d="M8 8l8 8M16 8l-8 8" stroke="#fff" stroke-width="2.4" stroke-linecap="round"/></svg></button>
     </div>
-    <button id="go" class="btn" type="submit"><svg class="bi" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M12 4v16M7 20h10M12 6H5M12 6h7M5 6l-3 7a3 3 0 006 0L5 6zM19 6l-3 7a3 3 0 006 0l-3-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg><span id="golabel">Compare</span><svg class="bchev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+    <button id="go" class="btn" type="submit"><span id="golabel">Compare</span><svg class="bchev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
   </form>
-  <p class="try"><svg viewBox="0 0 24 24" width="16" height="16" aria-hidden="true" focusable="false"><path d="M12 2c1 4 5 6 5 11a5 5 0 01-10 0c0-2 1-3.5 2-4.5.2 1.5 1 2.3 1.8 2.6C10.6 8 11 5 12 2z" fill="#F59E0B"/></svg>Try one of these</p>
-  <div class="chips" aria-label="Examples"><button type="button" class="chip" data-q="iPhone 17 Pro"><svg class="ci" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="7" y="2.5" width="10" height="19" rx="2.5"/><path d="M11 18.5h2"/></svg><span>iPhone 17 Pro</span></button><button type="button" class="chip" data-q="boAt Airdopes 141"><svg class="ci" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="8" cy="8" r="3.4"/><path d="M8 11.4v8"/><circle cx="16" cy="8" r="3.4"/><path d="M16 11.4v8"/></svg><span>boAt Airdopes 141</span></button><button type="button" class="chip" data-q="Red Tape shoes for men"><svg class="ci" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M3 16.5V10l4 2.2c1.4.8 3 .6 4.2-.4L13 10l2.5 2c1.2 1 2.6 1.4 4 1.6 1 .2 1.5.8 1.5 1.8V17H3z"/><path d="M3 19h18"/></svg><span>Red Tape shoes</span></button><button type="button" class="chip" data-q="Ponds cream"><svg class="ci" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><rect x="5" y="4" width="14" height="5" rx="1.5"/><path d="M6 9v9a2.5 2.5 0 002.5 2.5h7A2.5 2.5 0 0018 18V9"/><path d="M9 14h6"/></svg><span>Ponds cream</span></button></div>
-  <p class="privacy"><svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.6 12.2l2.4 2.4 4.4-4.8" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Stores open only when you press Compare. Nothing is sent to our servers; the results stay on your phone.</span></p>
+  <p class="try"><svg viewBox="0 0 24 24" width="17" height="17" aria-hidden="true" focusable="false"><path d="M12 2c1 4 5 6 5 11a5 5 0 01-10 0c0-2 1-3.5 2-4.5.2 1.5 1 2.3 1.8 2.6C10.6 8 11 5 12 2z" fill="#FF8A1F"/></svg>Why SmartSetu</p>
+  <ul class="perks">
+    <li><span class="pi"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 9l1.5-5h13L20 9M4 9v10h16V9M4 9h16M9 19v-5h6v5" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round" stroke-linecap="round"/></svg></span><strong>Right stores only</strong></li>
+    <li><span class="pi"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M13 3L5 14h6l-1 7 8-11h-6l1-7z" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linejoin="round"/></svg></span><strong>Prices as stores finish</strong></li>
+    <li><span class="pi"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M10 14a4.5 4.5 0 006.4 0l3-3a4.5 4.5 0 00-6.4-6.4l-1 1M14 10a4.5 4.5 0 00-6.4 0l-3 3a4.5 4.5 0 006.4 6.4l1-1" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round"/></svg></span><strong>Direct store links</strong></li>
+    <li><span class="pi"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.9"/><path d="M8 11V8a4 4 0 018 0v3" fill="none" stroke="currentColor" stroke-width="1.9"/></svg></span><strong>Private, on your phone</strong></li>
+  </ul>
+  <p class="privacy"><svg viewBox="0 0 24 24" width="28" height="28" aria-hidden="true"><path d="M12 3l7 3v5c0 4.6-3 8.4-7 10-4-1.6-7-5.4-7-10V6l7-3z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M8.6 12.2l2.4 2.4 4.4-4.8" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Stores open only when you press Compare. Nothing is sent to our servers; the results stay on your phone.</span></p>
 </div></section>
-<section class="wrap trustwrap"><ul class="trust">
-  <li><span class="ti"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M4 9l1.5-5h13L20 9M4 9v10h16V9M4 9h16M9 19v-5h6v5" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round" stroke-linecap="round"/></svg></span><span><strong>Only the right stores</strong><span class="sm">A phone search skips fashion stores, a shoe search skips electronics stores.</span></span></li>
-  <li><span class="ti"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><path d="M13 3L5 14h6l-1 7 8-11h-6l1-7z" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/></svg></span><span><strong>Prices as each store finishes</strong><span class="sm">The first prices show in seconds, you do not wait for the slowest store.</span></span></li>
-  <li><span class="ti"><svg viewBox="0 0 24 24" width="22" height="22" aria-hidden="true"><rect x="5" y="11" width="14" height="9" rx="2" fill="none" stroke="currentColor" stroke-width="1.8"/><path d="M8 11V8a4 4 0 018 0v3" fill="none" stroke="currentColor" stroke-width="1.8"/></svg></span><span><strong>Private</strong><span class="sm">Your searches and results stay on your phone.</span></span></li>
-</ul></section>
+</div>
 <main class="wrap">
   <p id="msg" class="msg" role="status" aria-live="polite"></p>
   <section id="progress" class="card" hidden aria-label="Store progress">
-    <div class="phead"><h2>Checking stores</h2><p id="pcount" class="pcount"></p></div>
+    <div class="phead"><span class="ring" aria-hidden="true"><svg viewBox="0 0 48 48" width="46" height="46"><circle cx="24" cy="24" r="19" fill="none" stroke="#BFE6D3" stroke-width="5"/><circle cx="24" cy="24" r="19" fill="none" stroke="#06976E" stroke-width="5" stroke-linecap="round" stroke-dasharray="90 120" transform="rotate(-90 24 24)"/><path d="M15.5 24.5l6 6 11-12" fill="none" stroke="#06976E" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div class="ptext"><h2>Checking stores</h2><p id="pcount" class="pcount"></p></div></div>
     <div id="pbar" class="pbar" role="progressbar" aria-label="Stores checked" aria-valuemin="0" aria-valuemax="9" aria-valuenow="0"><span id="pfill"></span></div>
     <ul id="plist" class="plist"></ul>
   </section>
   <section id="results" aria-live="polite"></section>
   <div id="morebox" class="morebox" hidden><button id="morebtn" class="btn ghost" type="button">Also check the other stores</button></div>
-  <section id="empty" class="empty">
-    <h2>How it works</h2>
-    <ol class="steps">
-      <li><span class="n">1</span><span><strong>Type a product</strong><br>A model like "iPhone 17 Pro" or a kind like "red tape shoes".</span></li>
-      <li><span class="n">2</span><span><strong>The right stores open</strong><br>Only stores that sell it are checked, so no time is wasted.</span></li>
-      <li><span class="n">3</span><span><strong>See the lowest price</strong><br>Prices appear as each store finishes, with a link to buy.</span></li>
-    </ol>
-  </section>
+  <section id="empty" class="empty" hidden></section>
 </main>
 <footer class="wrap foot"><p id="footnote"></p></footer>
 <script src="bundle.js"></script>

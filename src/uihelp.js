@@ -2,7 +2,7 @@
  * They only shorten and group what the engine already returned. Nothing is added, estimated or invented. */
 var FINAL = { ok: 1, no_cards: 1, no_data: 1, error: 1, timeout: 1, off: 1 };
 // Short plain line for a store that was skipped because its page showed a notice; keys match webtabs.NOCARDS_NOTE (V-242, D-090).
-var SKIP_TEXT = { croma: 'Skipped: asks for a pincode' };
+var SKIP_TEXT = { croma: 'Not available yet' };
 
 function isFinal(state) { return FINAL[state] === 1; }
 
@@ -56,4 +56,13 @@ function savings(rows) {
 // Indian digit grouping for the savings line, e.g. 5000 -> "\u20b95,000", 125000 -> "\u20b91,25,000".
 function inr(n) { var s = String(Math.round(n)), last = s.slice(-3), rest = s.slice(0, -3); return '\u20b9' + (rest ? rest.replace(/\B(?=(\d{2})+(?!\d))/g, ',') + ',' : '') + last; }
 
-module.exports = { rupeesOf: rupeesOf, savings: savings, inr: inr, isFinal: isFinal, doneCount: doneCount, shortLine: shortLine, splitGroups: splitGroups, SKIP_TEXT: SKIP_TEXT };
+// R13 (D-105): the member screen shows no technical detail (seconds, read method, try numbers, "browser"). Pure text helpers.
+function memberText(t) {
+  var x = String(t == null ? '' : t).replace(/\s*\((?:fast read)\)\s*$/i, '').replace(/^(?:2nd|3rd) try:\s*/i, '');
+  var m = /^Read (\d+) listings?(?: in [\d.]+ ?(?:s|ms))?\s*$/i.exec(x);
+  if (m) return m[1] + (m[1] === '1' ? ' listing' : ' listings') + ' found';
+  return x;
+}
+function memberFooter(when) { return (when ? 'Prices seen on ' + when + ' and they can change. ' : 'Prices can change. ') + 'Stock is not shown here, so check the store before you buy.'; }
+
+module.exports = { memberText: memberText, memberFooter: memberFooter, rupeesOf: rupeesOf, savings: savings, inr: inr, isFinal: isFinal, doneCount: doneCount, shortLine: shortLine, splitGroups: splitGroups, SKIP_TEXT: SKIP_TEXT };

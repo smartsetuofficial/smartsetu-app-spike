@@ -11,9 +11,9 @@ var M = require('./storemap.js');
 var NF = require('./nativefetch.js');
 var Dev = require('./devtest.js');
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.7';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.8';
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
-var PAUSED = { Myntra: 'Not on the phone app yet', Croma: 'Needs a pincode, not supported yet' };
+var PAUSED = { Croma: 'Not available yet' };
 function $(id) { return document.getElementById(id); }
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -50,7 +50,7 @@ function refreshBar() {
   $('pbar').setAttribute('aria-valuemax', String(total));
 }
 function initProgress(pl) {
-  var ul = $('plist'); ul.textContent = ''; plistItems = {}; pstates = {}; pactive = {}; maxDone = 0; var oldT = $('ptime'); if (oldT) oldT.remove();
+  var ul = $('plist'); ul.textContent = ''; plistItems = {}; pstates = {}; pactive = {}; maxDone = 0;
   R.STORES.forEach(function (s) {
     var li = el('li'), av = el('span', 'av', s.label.charAt(0)), mid = el('span', 'mid'), nm = el('span', 'nm', s.label), st = el('span', 'st wait', 'Waiting...'), ic = el('span', 'ic wait');
     av.setAttribute('aria-hidden', 'true'); ic.setAttribute('aria-hidden', 'true');
@@ -67,10 +67,9 @@ function updateProgress(run) {
   if (run.state === 'off') return; // stores that are not checked are drawn by initProgress
   var it = plistItems[run.store]; if (!it) return;
   var line = V.buildView({ query: {} }, [run]).stores[0];
-  var s = U.shortLine(run, W.lineText(run, line.text)), tag = run.slow ? '3rd try' : (retry && run.state !== 'off' ? '2nd try' : '');
-  if (s.kind === 'skip') tag = ''; // a store skipped for a notice needs no try label
-  if (run.via === 'fetch' && s.kind === 'ok') s.text += ' (fast read)';
-  it.st.textContent = (tag ? tag + ': ' : '') + s.text;
+  var s = U.shortLine(run, W.lineText(run, line.text));
+  s.text = U.memberText(s.text); // R13 (D-105): no seconds, no try labels, no read method on the member screen
+  it.st.textContent = s.text;
   it.st.className = 'st ' + s.kind; it.ic.className = 'ic ' + s.kind;
   pactive[run.store] = 1; pstates[run.store] = run.state; refreshBar();
 }
@@ -147,7 +146,7 @@ function render(view, o) {
     });
     box.appendChild(d);
   }
-  $('footnote').textContent = (view.seenAt ? 'Seen at ' + new Date(view.seenAt).toLocaleString() + '. ' : '') + view.footer;
+  $('footnote').textContent = U.memberFooter(view.seenAt ? new Date(view.seenAt).toLocaleString() : '');
   if (!live.scrolled) { live.scrolled = true; try { box.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) { /* older webview: stay where we are */ } }
 }
 
@@ -172,7 +171,7 @@ function storeOf(label) { return R.STORES.filter(function (s) { return s.label =
 // One place that starts the stores. Called only from startRun, which only a tap can reach (D-010).
 function runStores(tabs, o) { return R.runAll(tabs, o); }
 
-// Which stores to open. only = labels of an "also check the other stores" tap. Paused stores (Myntra, Croma) are never opened here.
+// Which stores to open. only = labels of an "also check the other stores" tap. Croma is paused and never opened here.
 function plan(q, only) {
   var kill = W.enabledMap(), pick = M.pick(q, R.STORES), enabled = {}, why = {}, skipped = [];
   kill.Croma = false;
@@ -197,11 +196,19 @@ async function startRun(q, only) {
     else { only.forEach(function (l) { if (pl.enabled[l]) setRow(l, 'wait', 'Waiting...', true); }); $('progress').classList.add('running'); maxDone = 0; refreshBar(); }
     retry = false;
     function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, perStoreMs: 50000, retryTimeouts: false }; }
-    var o1 = opts(pl.enabled); o1.fetchFirst = SmartSetuFetchRead.STORES_OK; o1.fetchRead = fr; o1.fetchMs = 9000;
+    var pass1 = Object.assign({}, pl.enabled); pass1.Myntra = false; // S20b: Myntra is read on its own after the others (card rescue, below), it does not hold up the rest
+    var o1 = opts(pass1); o1.fetchFirst = SmartSetuFetchRead.STORES_OK; o1.fetchRead = fr; o1.fetchMs = 9000;
     tabs = W.createWebTabs(pluginApi(), { ready: true });
     out = await runStores(tabs, o1);
     adopt(out.runs);
-    var bad = W.failingLabels(out.runs);
+    if (pl.enabled.Myntra) {
+      say('Checking Myntra...');
+      tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
+      var mr = await W.rescueRead(tabs2, storeOf('Myntra'), q, {});
+      W.mergeRuns(out, { runs: [mr] }); updateProgress(mr); adopt([mr]); liveRender();
+    }
+    var notMyntra = function (l) { return l !== 'Myntra'; };
+    var bad = W.failingLabels(out.runs).filter(notMyntra);
     if (bad.length) {
       say('Checking ' + bad.join(', ') + ' again...');
       retry = true;
@@ -213,25 +220,22 @@ async function startRun(q, only) {
     if (slowL.length) {
       tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
       for (var sl = 0; sl < slowL.length; sl++) {
-        say('Checking ' + slowL[sl] + ' once more, it is slow...');
+        say('Still checking ' + slowL[sl] + '...');
         var sr = await W.slowRead(tabs2, storeOf(slowL[sl]), q, smartsetuCollect, {});
         W.mergeRuns(out, { runs: [sr] }); updateProgress(sr); adopt([sr]); liveRender();
       }
     }
-    var empty = W.failingLabels(out.runs); // a store that is still empty gets a card rescue read (every store, D-073)
+    var empty = W.failingLabels(out.runs).filter(notMyntra); // a store that is still empty gets a card rescue read (every store, D-073)
     if (late()) empty = []; // the run has already taken long: show what is there instead of more tries
     if (empty.length) {
       tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
       for (var em = 0; em < empty.length; em++) {
-        say('Checking ' + empty[em] + ' one last way...');
+        say('Still checking ' + empty[em] + '...');
         var rr = await W.rescueRead(tabs2, storeOf(empty[em]), q, {});
         if (rr.state === 'ok') { W.mergeRuns(out, { runs: [rr] }); updateProgress(rr); adopt([rr]); }
       }
     }
     if (live.timer) { clearTimeout(live.timer); live.timer = 0; }
-    var tl = V.timeLine(out);
-    if (live.firstAt) tl += (tl ? ' ' : '') + 'First results after ' + Math.max(1, Math.round((live.firstAt - live.t0) / 1000)) + ' s.';
-    if (tl) { var pt = el('p', 'note', tl); pt.id = 'ptime'; $('progress').appendChild(pt); }
     var fin = buildNow(out.seenAt);
     render(fin.view);
     if (!extra) live.skipped = pl.skipped;
@@ -257,6 +261,9 @@ function onSubmit(ev) {
 
 document.addEventListener('DOMContentLoaded', function () {
   $('form').addEventListener('submit', onSubmit);
+  var qi = $('q'), qc = $('qclear');
+  function syncClear() { qc.hidden = !qi.value; }
+  qi.addEventListener('input', syncClear); qc.addEventListener('click', function () { qi.value = ''; syncClear(); qi.focus(); }); syncClear();
   $('morebtn').addEventListener('click', function () { if (!busy && live.skipped.length) startRun(live.q, live.skipped.slice()); });
   Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (c) { c.addEventListener('click', function () { $('q').value = c.getAttribute('data-q') || ''; $('q').focus(); }); });
   // A store link opens in the phone's own browser window (Chrome Custom Tab), not inside the app page.

@@ -117,8 +117,9 @@
       seen.add(p);
       var ptext = textOf(p, '\n'), link = absHref(a.attrs.href, pageUrl);
       var mark = new Set(); walk(p, function (e) { if (markAll.has(e)) mark.add(e); });
-      out.cards.push({ link: link.slice(0, 300), sponsored: /\/sspa\/click|sponsored/i.test(link) || /sponsored/i.test(ptext), ad: /(^|\n)\s*AD\s*(\n|$)/.test(ptext), html: (function () { var h = serialize(p, mark, pageUrl); return h.length > 6000 ? h.slice(0, 6000) + '<!--TRUNCATED-->' : h; })() });
-      if (out.cards.length >= 24) break;
+      var isSp = /\/sspa\/click|sponsored/i.test(link) || /sponsored/i.test(ptext), isAd = /(^|\n)\s*AD\s*(\n|$)/.test(ptext), capH = isSp || isAd ? 1500 : 12000; // S20b: Amazon cards were longer than the old cap, the price block sat after the cut (V-324)
+      out.cards.push({ link: link.slice(0, 300), sponsored: isSp, ad: isAd, html: (function () { var h = serialize(p, mark, pageUrl); return h.length > capH ? h.slice(0, capH) + '<!--TRUNCATED-->' : h; })() });
+      if (out.cards.filter(function (c) { return !c.sponsored && !c.ad; }).length >= 24 || out.cards.length >= 40) break; // S20b: ads do not use up the 24 card limit
     }
     return out;
   }

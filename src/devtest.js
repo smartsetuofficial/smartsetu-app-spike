@@ -22,7 +22,7 @@ function fastLine(r) {
 
 async function runFull(env, log) {
   var R = env.R, W = env.W, V = env.V, C = env.C, M = env.M, q = env.query() || 'iphone 17 pro', t0 = Date.now(), ua = C.desktopUa(navigator.userAgent);
-  var notes = [], fast = [], struct = [], rescue = [], listings = [], rows = [], runs = [], tabs = null, tabs2 = null, err = null;
+  var notes = [], fast = [], struct = [], rescue = [], listings = [], croma = [], offers = [], rows = [], runs = [], tabs = null, tabs2 = null, err = null;
   var pickInfo = M.pick(q, R.STORES);
   notes.push('Category pick: ' + (pickInfo.cats.join(', ') || 'none (every store is checked)') + ' | would open: ' + pickInfo.keys.join(', ') + ' | would skip: ' + (Object.keys(pickInfo.skip).join(', ') || 'none') + ' (this test opens ALL stores)');
   try { var pq = env.SmartSetu.query.parse(q); notes.push('ENGINE: query v' + env.SmartSetu.query.version + ' | parser v' + env.SmartSetu.parser.version + ' | app ' + (env.version || '?') + ' | parsed ' + JSON.stringify({ kidsQ: pq.kidsQ, sub: pq.sub, gender: pq.gender, age: pq.age, cat: pq.cat && pq.cat.term, winter: pq.winter, extras: pq.extras, models: pq.models, maxPrice: pq.maxPrice })); } catch (e) { notes.push('ENGINE line failed: ' + String(e && e.message).slice(0, 80)); }
@@ -58,12 +58,24 @@ async function runFull(env, log) {
       struct = struct.concat(W.structLines(st.label, pr));
       var rr = await W.rescueRead(tabs2, st, q, {});
       rescue = rescue.concat(W.rescueLines(st.label, rr));
+      if (rr.state === 'ok' && rr.snapshot) { try { rescue = rescue.concat(W.listingLines([rr], [], env.SmartSetu.parseSearch)); } catch (e) { rescue.push(st.label + ' rescue listings failed: ' + String(e && e.message).slice(0, 80)); } } // S20b (V-317): what the rescued cards turn into
+    }
+    var cs = R.STORES.filter(function (s) { return s.key === 'croma'; })[0];
+    if (cs) { log('Step 3 of 3: Croma pincode form (read only)...'); croma = W.pincodeLines(await W.readPage(tabs2, cs.url(q), W.pincodeProbe, { settleMs: 6000 })); }
+    log('Step 4: offers from one product page per store...'); // S20b (V-296): bank offers, coupons, EMI as each store shows them; report only
+    for (var j = 0; j < R.STORES.length; j++) {
+      var so = R.STORES[j], orun = runs.filter(function (x) { return x.key === so.key; })[0];
+      if (!orun || orun.state !== 'ok') continue;
+      var pk = W.pickFromView(view, so.label, so.url(q));
+      if (!pk) { offers.push(so.label + ': no matched listing with a product link in the result, offers not read'); continue; }
+      log('Step 4: ' + so.label + '...');
+      offers = offers.concat(W.offerLines(so.label, pk.url, await W.readPage(tabs, pk.url, W.offerProbe, { settleMs: 4000 })));
     }
   } catch (e) { err = e; }
   finally { try { if (tabs) tabs.dispose(); if (tabs2) tabs2.dispose(); } catch (_) {} }
   var diag = notes.concat(['FAST READ (no page, phone network layer, desktop identity)'], fast, ['', 'HIDDEN PAGE (per store: page state when no listings)']);
   runs.forEach(function (r) { if (r.diag) diag.push(r.store + ' | ' + JSON.stringify(r.diag)); });
-  return W.buildReport({ version: env.version, query: q, seenAt: new Date().toISOString(), totalS: Math.round((Date.now() - t0) / 1000), ua: navigator.userAgent, error: err && (err.message || err), runs: runs, rows: rows, diag: diag, struct: struct, rescue: rescue, listings: listings });
+  return W.buildReport({ version: env.version, query: q, seenAt: new Date().toISOString(), totalS: Math.round((Date.now() - t0) / 1000), ua: navigator.userAgent, error: err && (err.message || err), runs: runs, rows: rows, diag: diag, struct: struct, rescue: rescue, listings: listings, croma: croma, offers: offers });
 }
 
 function attach(env) {
