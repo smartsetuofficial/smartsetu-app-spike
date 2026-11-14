@@ -257,7 +257,7 @@ function pageUndef() { return undefined; }
   W.mergeRuns(outM, { runs: [sH] });
   ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
   var appH = read('src/app.js');
-  ok(/VERSION = '0\.10\.8'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && !/'3rd try'|'2nd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try (no try label on the member screen, R13), one runAll inside runStores, 2 callers');
+  ok(/VERSION = '0\.10\.9'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && !/'3rd try'|'2nd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try (no try label on the member screen, R13), one runAll inside runStores, 2 callers');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -388,7 +388,7 @@ function pageUndef() { return undefined; }
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.10.8' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.8, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
+  ok(pkg.version === '0.10.9' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.9, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 1 && (appjs.match(/runStores\(/g) || []).length === 3 && appjs.indexOf('await runStores(') > appjs.indexOf('async function startRun') && (appjs.match(/startRun\(/g) || []).length === 3 && /addEventListener\('submit', onSubmit\)/.test(appjs) && /getElementById\('morebtn'\)|\$\('morebtn'\)\.addEventListener\('click'/.test(appjs), 'D5 stores start only inside startRun, reached only from the Compare submit or the also-check tap (D-010)');
@@ -435,7 +435,7 @@ function pageUndef() { return undefined; }
   ok(html.indexOf('href="compare.css"') >= 0 && html.indexOf('href="app.css"') > html.indexOf('href="compare.css"') && html.indexOf('name="theme-color"') > 0 && /id="pbar"[^>]*role="progressbar"/.test(html) && html.indexOf('id="pcount"') > 0 && html.indexOf('id="pfill"') > 0, 'U11 index.html loads app.css after compare.css, has the progress bar and theme colour');
   ok(!/https?:\/\/(?!www\.w3\.org)/.test(css) && !/https?:\/\/(?!www\.w3\.org)/.test(html) && !/@import/.test(css) && !/url\((?!fonts\/Inter-(Regular|Medium|Bold)\.woff2\)|fonts\/Inter-ExtraBoldItalic\.woff\)|"data:image\/svg\+xml)/.test(css), 'U12 app.css and index.html call no other host (only the 4 bundled Inter files and one inline svg icon)');
   ok(/prefers-reduced-motion/.test(css) && cmpCss.indexOf('.ic') < 0, 'U13 reduced motion respected, shared compare.css left alone');
-  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.8'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
+  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.9'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
   function pngSize(f) { var b = fs.readFileSync(f); return b.slice(0, 8).toString('hex') === '89504e470d0a1a0a' ? [b.readUInt32BE(16), b.readUInt32BE(20)] : null; }
   var resDir = path.join(__dirname, 'resources', 'android', 'res'), fgS = { mdpi: 108, hdpi: 162, xhdpi: 216, xxhdpi: 324, xxxhdpi: 432 }, lgS = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
   var iconsOk = Object.keys(fgS).every(function (d) {
@@ -555,6 +555,15 @@ function pageUndef() { return undefined; }
   ok(/clean\(p, isSp \|\| isAd \? 1500 : 12000\)/.test(psS) && /capH = isSp \|\| isAd \? 1500 : 12000/.test(sdS) && !/6000/.test(psS) && !/slice\(0, 6000\)/.test(sdS) && /filter\(c => !c\.sponsored && !c\.ad\)\.length >= 24/.test(psS), 'S4 card html cap 12000 (ads 1500) and ads do not use up the 24 card limit, in the page read and the fast read');
   var pl = W.pincodeLines({ ok: true, result: { url: 'https://www.croma.com/x', inputs: [{ t: 'text', n: 'pin', i: 'pincode', p: 'Enter pincode', a: '', m: 6, v: 1 }], buttons: ['Apply'], iframes: ['x.test#f1'], snippets: ['Update pincode for best prices'], dialog: true } });
   ok(pl.length === 4 && /dialog or popup present: yes/.test(pl[0]) && /placeholder Enter pincode \| aria - \| maxlength 6 \| visible 1/.test(pl[1]) && /button or link: Apply/.test(pl[2]) && /text near pincode/.test(pl[3]) && /no answer/.test(W.pincodeLines(null)[0]) && /CROMA PINCODE PROBE/.test(W.buildReport({ croma: pl })) && typeof W.pincodeProbe === 'function', 'S5 Croma pincode probe lines and report section (read only)');
+  // S20c (D-105): home and results like the owner designs; texts of the 4 benefit cards are the owner's (screenshot 14 Nov 2026)
+  var h20 = read('www/index.html'), c20 = read('www/app.css');
+  var perks20 = (h20.match(/<ul class="perks">[\s\S]*?<\/ul>/) || [''])[0], titles20 = (perks20.match(/<strong>[^<]+<\/strong>/g) || []).map(function (x) { return x.replace(/<\/?strong>/g, ''); });
+  ok(JSON.stringify(titles20) === JSON.stringify(['Right stores only', 'Prices as stores finish', 'Direct store links', 'Private, on your phone']) && /<p class="try">[\s\S]*?<\/svg>Why SmartSetu<\/p>/.test(h20) && !/class="chip"/.test(h20), 'S20c-1 the 4 benefit cards have exactly the owner texts, no example chips');
+  ok(/\.perks\{grid-template-columns:repeat\(2,minmax\(0,1fr\)\)/.test(c20) && /\.perks li\{[^}]*min-height:78px/.test(c20), 'S20c-2 benefit cards are 2 x 2');
+  ok(/body\{[^}]*background-image:linear-gradient\(180deg,#011A52/.test(c20) && /html\{[^}]*background:#0A58DA/.test(c20) && /\.herobox\{border-radius:0;overflow:visible/.test(c20), 'S20c-3 the whole page is blue (no light band under the hero)');
+  ok(/#progress,\.card,details\.more,\.devtest\{color:#0B1F3A\}/.test(c20) && /\.msg\{color:#FFE2B0\}/.test(c20) && /#results>h2\{[^}]*color:#fff/.test(c20), 'S20c-4 text colours: dark text on white cards, light text on the blue page (white card headings must not turn invisible)');
+  ok(/class="slogan">SmartSetu &ndash; Shop Smarter, Save Bigger</.test(h20) && /\.rows a\.lk\{[^}]*border-radius:var\(--r-pill\)[^}]*linear-gradient\(180deg,#2F6BFF,#0B3FBF\)/.test(c20) && /\.av\{width:42px;height:42px;border-radius:50%/.test(c20), 'S20c-5 footer slogan, blue pill Go to store link, round store avatars');
+  ok(!/Get the best deals/i.test(h20 + c20 + read('src/app.js')), 'S20c-6 no best-deal claim anywhere (D-061: no best price is claimed for different products)');
   console.log('test_app: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
 })();

@@ -136,3 +136,65 @@ details.more[open] summary::after{content:"\2212"}
 .btn.ghost:hover{background:var(--teal-tint)}
 .empty{padding:0}
 @media (prefers-reduced-motion:reduce){.pbar span{transition:none}#progress.running .pbar span,#progress.running .ic.wait,.sk-l{animation:none}}
+
+/* ===== S20c (D-105): whole page blue like the owner designs (home + results), glass cards, bigger cart, 2x2 benefit cards, store avatars, price rows.
+ * Rules below only override the S20b rules above. compare.css (shared with the extension) is still not edited. ===== */
+html{min-height:100%;background:#0A58DA}
+body{min-height:100vh;background-color:#0A58DA;background-image:linear-gradient(180deg,#011A52 0,#012F86 560px,#0446C2 1150px,#0A58DA 1900px);background-repeat:no-repeat;color:#fff}
+.herobox{border-radius:0;overflow:visible;background:radial-gradient(110% 40% at 92% 14%,rgba(30,120,255,.5),rgba(30,120,255,0) 62%)}
+.hero .wrap>.art{right:6px;top:-4px;width:min(36vw,140px)}
+.hero h1{max-width:63%}
+.hero .lead{max-width:66%}
+/* "Why SmartSetu" heading = centred pill with a line on both sides */
+.try{justify-content:center;gap:10px;margin:20px 0 0;font-size:13px;letter-spacing:.04em;text-transform:none;color:#fff}
+.try::before{order:-2}.try svg{order:-1}.try::after{order:1}
+.try::before,.try::after{content:"";flex:1;height:1px;background:linear-gradient(90deg,rgba(255,176,32,0),rgba(255,176,32,.85))}
+.try::after{background:linear-gradient(270deg,rgba(255,176,32,0),rgba(255,176,32,.85))}
+.perks{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px;margin:12px 0 0}
+.perks li{position:relative;overflow:hidden;flex-direction:row;justify-content:flex-start;gap:11px;min-height:78px;padding:12px 12px 16px;text-align:left;border-radius:20px;background:linear-gradient(180deg,#fff 0%,#EAF2FF 100%);box-shadow:0 12px 26px rgba(0,10,60,.3)}
+.perks li::after{content:"";position:absolute;left:-10%;right:-10%;bottom:-9px;height:16px;border-radius:50%;background:#34D399;opacity:.75}
+.perks li:nth-child(2)::after{background:#A855F7}
+.perks li:nth-child(3)::after{background:#38BDF8}
+.perks li:nth-child(4)::after{background:#FFB020}
+.pi{flex:none;width:46px;height:46px;border-radius:15px;color:#fff;background:linear-gradient(155deg,#5B9BFF 0%,#1D4ED8 60%,#1536A8 100%);box-shadow:0 8px 14px rgba(29,78,216,.38),inset 0 2px 3px rgba(255,255,255,.55)}
+.pi svg{width:26px;height:26px}
+.perks li:nth-child(2) .pi{background:linear-gradient(155deg,#FFD25A 0%,#F59E0B 60%,#C2410C 100%);box-shadow:0 8px 14px rgba(245,158,11,.4),inset 0 2px 3px rgba(255,255,255,.55)}
+.perks li:nth-child(3) .pi{background:linear-gradient(155deg,#5FE0D0 0%,#0EA5A0 60%,#0B6B8A 100%);box-shadow:0 8px 14px rgba(14,165,160,.4),inset 0 2px 3px rgba(255,255,255,.55)}
+.perks strong{font-size:14px;line-height:1.2;font-weight:700;color:#0B1F3A}
+.privacy{padding:12px 14px;font-size:12px;border-radius:16px;background:linear-gradient(180deg,rgba(8,40,140,.85),rgba(5,28,104,.85))}
+/* footer slogan from the owner design */
+.foot{position:relative;padding-top:20px;color:#CFE0FF}
+.slogan{margin:18px 0 0;display:flex;align-items:center;justify-content:center;gap:10px;font-size:13px;font-weight:700;color:#fff;text-align:center}
+.slogan::before,.slogan::after{content:"";width:22px;height:2px;border-radius:2px;background:#FFB020}
+#footnote{margin:0;font-size:12.5px;line-height:1.5;color:#CFE0FF;text-align:center}
+/* messages / headings / notes sitting directly on the blue page */
+.msg{color:#FFE2B0}
+#results>h2,.empty h2{color:#fff}
+#results>h2{display:table;margin:30px auto 10px;padding:10px 22px;border:1.5px solid rgba(160,196,255,.6);border-radius:var(--r-pill);background:rgba(3,38,128,.75);font-size:21px;font-weight:800;text-align:center}
+#results>h2::before{content:"\2605";margin-right:9px;color:#FFB020}
+#results>.note,.empty,.empty p{color:#DCE8FF}
+#results>.note{margin:6px 2px 12px;font-size:13.5px}
+.live{border:1px solid rgba(160,196,255,.45);background:rgba(8,40,140,.7);color:#E6EEFF}
+/* progress card: white glass, pastel round store avatars */
+#progress{border:1.5px solid rgba(255,255,255,.75);background:linear-gradient(180deg,rgba(255,255,255,.97),rgba(232,241,255,.95));box-shadow:0 16px 34px rgba(0,10,60,.32)}
+.plist li{border-bottom-color:#DCE6F8}
+.av{width:42px;height:42px;border-radius:50%;box-shadow:0 3px 8px rgba(11,31,58,.14)}
+.plist li:nth-child(1) .av{background:#FFF1D6;color:#B45309}.plist li:nth-child(2) .av{background:#FFF6C2;color:#A16207}.plist li:nth-child(3) .av{background:#FFE0EC;color:#BE185D}
+.plist li:nth-child(4) .av{background:#E3EDFF;color:#1D4ED8}.plist li:nth-child(5) .av{background:#FFE0EC;color:#DB2777}.plist li:nth-child(6) .av{background:#EDE5FF;color:#6D28D9}
+.plist li:nth-child(7) .av{background:#D9F7F1;color:#0F766E}.plist li:nth-child(8) .av{background:#FFE9D2;color:#EA580C}.plist li:nth-child(9) .av{background:#EDE5FF;color:#5B21B6}
+.plist li{grid-template-columns:42px 1fr 24px}
+/* result cards: glass white, big price on the right behind a divider, blue pill link */
+.card{border:1.5px solid rgba(255,255,255,.75);background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(236,243,255,.96));box-shadow:0 16px 34px rgba(0,10,60,.3)}
+.rows li{align-items:center}
+.rows .p{align-items:flex-end;gap:2px;padding-left:12px;border-left:1px solid var(--line)}
+.rows .s{font-size:16px;font-weight:700;color:#0B1F3A}
+.rows .pn{font-size:22px;font-weight:800;color:#0B1F3A}
+.rows a.lk{margin-top:4px;min-height:32px;padding:0 14px;border-radius:var(--r-pill);background:linear-gradient(180deg,#2F6BFF,#0B3FBF);color:#fff;font-size:13px;font-weight:700;box-shadow:0 6px 12px rgba(11,63,191,.3)}
+.rows a.lk::after{content:"\203A";margin-left:6px;font-size:16px;line-height:1}
+.rows li.low{background:#E6EEFF}
+details.more{border:1.5px solid rgba(255,255,255,.75);border-radius:22px;background:linear-gradient(180deg,rgba(255,255,255,.98),rgba(236,243,255,.96));box-shadow:0 16px 34px rgba(0,10,60,.3)}
+.btn.ghost{border-color:rgba(255,255,255,.7);background:rgba(255,255,255,.96)}
+.foot{background:none;overflow:hidden}
+.foot::after{content:"";position:absolute;left:0;right:0;bottom:0;height:34px;pointer-events:none;background:radial-gradient(110% 100% at 0% 100%,#FF9F1C 0 42%,transparent 43%),radial-gradient(110% 100% at 100% 100%,#2F6BFF 0 34%,transparent 35%)}
+#progress,.card,details.more,.devtest{color:#0B1F3A}
+#results>h2{color:#fff}
