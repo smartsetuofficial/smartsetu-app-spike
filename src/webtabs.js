@@ -393,11 +393,16 @@ function listingLines(runs, rows, parse) {
     });
     var n = 0;
     cards.forEach(function (c) { if (n >= 30 || !c || !(c.sponsored || c.ad)) return; n++; var lk = String(c.link || ''), tx = plainText(c.html), why = []; /* S20d (V-351, every store): why each card was flagged */ if (/\/sspa\/click/i.test(lk)) why.push('link has /sspa/click'); else if (/sponsored/i.test(lk)) why.push('link has sponsored'); if (/sponsored/i.test(tx)) why.push('text has Sponsored'); if (c.ad) why.push('own line AD'); out.push('- skipped ad | #' + n + ' | why: ' + (why.join(' + ') || 'flag set by the page reader') + ' | ' + (/\u20B9\s?\d|Rs\.?\s?\d/.test(tx) ? 'has a price' : 'no price') + ' | ' + tx.slice(0, 140)); });
+    // S21a (V-362): every listing whose price pair the parser corrected or dropped (card.dbg), with the card text, max 6 per store
+    (p.cards || []).filter(function (c) { return c && c.dbg; }).slice(0, 6).forEach(function (c) {
+      var rawD = cards.filter(function (x) { return x && normUrl(x.link) === normUrl(c.url); })[0];
+      out.push('- price-check | ' + (c.notes || []).join(',') + ' | check ' + JSON.stringify(c.dbg) + ' | ' + String(c.title || '(no title)').slice(0, 50) + ' | ' + (rawD ? 'text: ' + plainText(rawD.html).slice(0, 380) : '(raw card not found)'));
+    });
     // S18b (V-298): the cut html of the CHEAPEST parsed listing of every store, so a wrong price (Rs 2 for a Rs 1,340 mixer) can be traced to the real card text
     var cheap = (p.cards || []).filter(function (c) { return c.priceNow != null; }).sort(function (a, b) { return a.priceNow - b.priceNow; })[0];
     if (cheap) {
       var rawC = cards.filter(function (x) { return x && normUrl(x.link) === normUrl(cheap.url); })[0];
-      out.push('- cheapest card html | ' + money(cheap.priceNow) + (cheap.mrp ? ' (MRP ' + money(cheap.mrp) + ')' : '') + ' | ' + (cheap.notes || []).join(',') + ' | ' + String(cheap.title || '(no title)').slice(0, 60) + ' | ' + (rawC ? regionOf(rawC.html, 450) : '(raw card not found for this listing)'));
+      out.push('- cheapest card html | ' + money(cheap.priceNow) + (cheap.mrp ? ' (MRP ' + money(cheap.mrp) + ')' : '') + ' | ' + (cheap.notes || []).join(',') + ' | ' + String(cheap.title || '(no title)').slice(0, 60) + ' | ' + (rawC ? 'text: ' + plainText(rawC.html).slice(0, 380) : '(raw card not found for this listing)')); // S21a (V-362): the card TEXT (tags removed). regionOf stopped at the first 'price' word, which on Amazon is a CSS class name, so the amounts were never shown
     }
   });
   return out;

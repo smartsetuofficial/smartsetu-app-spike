@@ -65,4 +65,15 @@ function memberText(t) {
 }
 function memberFooter(when) { return (when ? 'Prices seen on ' + when + ' and they can change. ' : 'Prices can change. ') + 'Stock is not shown here, so check the store before you buy.'; }
 
-module.exports = { memberText: memberText, memberFooter: memberFooter, rupeesOf: rupeesOf, savings: savings, inr: inr, isFinal: isFinal, doneCount: doneCount, shortLine: shortLine, splitGroups: splitGroups, SKIP_TEXT: SKIP_TEXT };
+// S21b (D-110, ALL queries, no word list): how many listings of each store the engine counted as matching the search. A store whose page was read but has none shows "No matching products" instead of its raw card count (before, Reliance showed "7 listings found" for laptop bags and cartridges on a toys search). Matching = similar-product listings + compared listings, exactly what the result screen shows. null when the engine result has no store status.
+function relevantByStore(res) {
+  if (!res || !res.storeStatus) return null;
+  var m = {};
+  Object.keys(res.storeStatus).forEach(function (k) { if (res.storeStatus[k] === 'ok') m[k] = 0; });
+  ((res.similar && res.similar.stores) || []).forEach(function (s) { if (s && Object.prototype.hasOwnProperty.call(m, s.store)) m[s.store] += (typeof s.total === 'number' ? s.total : (s.items ? s.items.length : 0)); });
+  (res.clusters || []).forEach(function (cl) { ((cl && cl.members) || []).forEach(function (x) { if (x && Object.prototype.hasOwnProperty.call(m, x.store)) m[x.store] += 1; }); });
+  return m;
+}
+function relevanceLine(n) { return n > 0 ? { text: n + (n === 1 ? ' matching listing' : ' matching listings'), kind: 'ok' } : { text: 'No matching products', kind: 'skip' }; }
+
+module.exports = { memberText: memberText, memberFooter: memberFooter, rupeesOf: rupeesOf, savings: savings, inr: inr, isFinal: isFinal, doneCount: doneCount, shortLine: shortLine, relevantByStore: relevantByStore, relevanceLine: relevanceLine, splitGroups: splitGroups, SKIP_TEXT: SKIP_TEXT };

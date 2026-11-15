@@ -257,7 +257,7 @@ function pageUndef() { return undefined; }
   W.mergeRuns(outM, { runs: [sH] });
   ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
   var appH = read('src/app.js');
-  ok(/VERSION = '0\.10\.11'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && !/'3rd try'|'2nd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try (no try label on the member screen, R13), one runAll inside runStores, 2 callers');
+  ok(/VERSION = '0\.10\.12'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && !/'3rd try'|'2nd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try (no try label on the member screen, R13), one runAll inside runStores, 2 callers');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -388,7 +388,7 @@ function pageUndef() { return undefined; }
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.10.11' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.11, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
+  ok(pkg.version === '0.10.12' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.12, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 1 && (appjs.match(/runStores\(/g) || []).length === 3 && appjs.indexOf('await runStores(') > appjs.indexOf('async function startRun') && (appjs.match(/startRun\(/g) || []).length === 3 && /addEventListener\('submit', onSubmit\)/.test(appjs) && /getElementById\('morebtn'\)|\$\('morebtn'\)\.addEventListener\('click'/.test(appjs), 'D5 stores start only inside startRun, reached only from the Compare submit or the also-check tap (D-010)');
@@ -435,7 +435,7 @@ function pageUndef() { return undefined; }
   ok(html.indexOf('href="compare.css"') >= 0 && html.indexOf('href="app.css"') > html.indexOf('href="compare.css"') && html.indexOf('name="theme-color"') > 0 && /id="pbar"[^>]*role="progressbar"/.test(html) && html.indexOf('id="pcount"') > 0 && html.indexOf('id="pfill"') > 0, 'U11 index.html loads app.css after compare.css, has the progress bar and theme colour');
   ok(!/https?:\/\/(?!www\.w3\.org)/.test(css) && !/https?:\/\/(?!www\.w3\.org)/.test(html) && !/@import/.test(css) && !/url\((?!fonts\/Inter-(Regular|Medium|Bold)\.woff2\)|fonts\/Inter-ExtraBoldItalic\.woff\)|"data:image\/svg\+xml)/.test(css), 'U12 app.css and index.html call no other host (only the 4 bundled Inter files and one inline svg icon)');
   ok(/prefers-reduced-motion/.test(css) && cmpCss.indexOf('.ic') < 0, 'U13 reduced motion respected, shared compare.css left alone');
-  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.11'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
+  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.12'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
   function pngSize(f) { var b = fs.readFileSync(f); return b.slice(0, 8).toString('hex') === '89504e470d0a1a0a' ? [b.readUInt32BE(16), b.readUInt32BE(20)] : null; }
   var resDir = path.join(__dirname, 'resources', 'android', 'res'), fgS = { mdpi: 108, hdpi: 162, xhdpi: 216, xxhdpi: 324, xxxhdpi: 432 }, lgS = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
   var iconsOk = Object.keys(fgS).every(function (d) {
@@ -571,6 +571,11 @@ function pageUndef() { return undefined; }
   var fl40 = []; for (var iF = 0; iF < 40; iF++) fl40.push({ link: iF === 0 ? 'https://www.amazon.in/sspa/click?x=1' : 'https://www.amazon.in/dp/B' + iF, sponsored: true, ad: iF === 1, html: '<div>' + (iF === 0 ? 'Sponsored ' : '') + 'Shirt ' + iF + (iF === 0 ? ' \u20B9399' : '') + '</div>' });
   var lf = W.listingLines([{ store: 'Amazon', snapshot: { cards: fl40 } }], [], function () { return { cards: [], skipped: { sponsored_or_ad: 40 } }; }).filter(function (l) { return /^- skipped ad \| /.test(l); });
   ok(lf.length === 30 && /^- skipped ad \| #1 \| why: link has \/sspa\/click \+ text has Sponsored \| has a price \| Sponsored Shirt 0/.test(lf[0]) && /why: own line AD|why: flag set by the page reader/.test(lf[1]), 'S2 report: every flagged card (up to 30, every store) shows why it was flagged, whether it has a price, and its text');
+  var cD = read('www/app.css'), hD = read('www/index.html'), bD = cD.slice(cD.indexOf('S21d-a (D-112)'));
+  ok(bD.length > 100 && cD.indexOf('S21d-a (D-112)') > cD.indexOf('S20e (D-107)') && /\.herobox::before\{[^}]*pointer-events:none[^}]*z-index:0|\.herobox::before\{[^}]*z-index:0[^}]*pointer-events:none/.test(bD) && (bD.match(/\.herobox::before\{[^}]*\}/) || [''])[0].split('data:image/svg+xml').length - 1 >= 5 && /\.herobox::before\{[^}]*mask-image:linear-gradient\(180deg,#000 55%,transparent 100%\)/.test(bD), 'S21d-a-1 Home background: light streaks + 5 stars behind the content, no hard edge (mask), clicks pass through');
+  ok(/\.perks li::before\{[^}]*pointer-events:none/.test(bD) && /\.perks li>\*\{position:relative;z-index:1\}/.test(bD) && /\.perks li\{[^}]*inset 0 2px 0 #fff/.test(bD), 'S21d-a-2 benefit cards: glass sheen behind the text, inner highlight');
+  ok(/\.privacy svg path:first-child\{fill:#2FD67B;stroke:#0B8A4B/.test(bD) && /\.privacy svg path:last-child\{stroke:#fff/.test(bD) && /<p class="privacy"><svg[^>]*><path d="M12 3l7 3v5/.test(hD), 'S21d-a-3 privacy shield is green with a white tick, markup of index.html unchanged');
+  ok(!/https?:\/\/(?!www\.w3\.org)/.test(bD) && !/@import/.test(bD) && !/Get the best deals/i.test(bD + hD), 'S21d-a-4 new CSS has no external URL, no best-deal claim');
   console.log('test_app: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);
 })();

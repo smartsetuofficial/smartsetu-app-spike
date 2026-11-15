@@ -11,7 +11,7 @@ var M = require('./storemap.js');
 var NF = require('./nativefetch.js');
 var Dev = require('./devtest.js');
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.11';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.12';
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = { Croma: 'Not available yet' };
 function $(id) { return document.getElementById(id); }
@@ -152,9 +152,22 @@ function render(view, o) {
 
 function adopt(runs) { (runs || []).forEach(function (r) { if (r && r.state !== 'off' && r.state !== 'retrying') live.runs[r.store] = r; }); }
 function allRuns() { return Object.keys(live.runs).map(function (k) { return live.runs[k]; }); }
+// S21b (D-110): after the engine has counted, a store line says how many listings MATCH the search (or "No matching products"), not how many cards the page had. Only stores that finished with state ok; a failure here never stops the run.
+function paintRelevance(res, runs) {
+  try {
+    var rel = U.relevantByStore(res); if (!rel) return;
+    runs.forEach(function (run) {
+      var it = plistItems[run.store];
+      if (!it || run.state !== 'ok' || !Object.prototype.hasOwnProperty.call(rel, run.key)) return;
+      var s = U.relevanceLine(rel[run.key]);
+      it.st.textContent = s.text; it.st.className = 'st ' + s.kind; it.ic.className = 'ic ' + s.kind;
+    });
+  } catch (_) { /* the plain store line stays */ }
+}
 function buildNow(seenAt) {
   var runs = allRuns(), snaps = runs.filter(function (r) { return r.snapshot; }).map(function (r) { return r.snapshot; });
   var res = SmartSetu.compareAny({ query: live.q, searches: snaps, products: [], seenAt: seenAt }), v = V.buildView(res, runs, seenAt);
+  paintRelevance(res, runs);
   return { view: v, snaps: snaps.length };
 }
 // Results are drawn as soon as a store has listings, and again (at most every 0.4 s) when more stores finish. A failure here never stops the run.
@@ -172,12 +185,14 @@ function storeOf(label) { return R.STORES.filter(function (s) { return s.label =
 function runStores(tabs, o) { return R.runAll(tabs, o); }
 
 // Which stores to open. only = labels of an "also check the other stores" tap. Croma is paused and never opened here.
+// S21b (D-110): which stores to open is NOT decided from a word list any more (the table in storemap.js is a guess, V-271, and cannot cover thousands of searches). Every store is read; the store line then says how many listings match (paintRelevance). Set true to bring the old skip back.
+var SKIP_BY_WORDS = false;
 function plan(q, only) {
   var kill = W.enabledMap(), pick = M.pick(q, R.STORES), enabled = {}, why = {}, skipped = [];
   kill.Croma = false;
   R.STORES.forEach(function (s) {
     var on = kill[s.label] !== false;
-    if (on && pick.skip[s.key]) { why[s.label] = pick.skip[s.key]; skipped.push(s.label); on = false; }
+    if (SKIP_BY_WORDS && on && pick.skip[s.key]) { why[s.label] = pick.skip[s.key]; skipped.push(s.label); on = false; }
     if (only) on = kill[s.label] !== false && only.indexOf(s.label) >= 0;
     enabled[s.label] = on;
   });
