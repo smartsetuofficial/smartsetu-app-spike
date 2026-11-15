@@ -11,7 +11,7 @@ function detailOf(ev) {
 
 // Stores that are not read on the phone yet (shown honestly on the screen, D-078, D-081). Key = runner_core store key, label = runner_core store label.
 var OFF_TEXT = { myntra: 'No data on the phone app yet' };
-var NOCARDS_NOTE = { croma: "Croma's page asks for a pincode, so no products were shown." }; // seen on the page (V-242); the cause of the empty result stays unverified (V-243)
+var NOCARDS_NOTE = { croma: "Croma showed no products even after a pincode was entered." }; // seen on the page (V-242); the cause of the empty result stays unverified (V-243)
 function enabledMap() { return {}; } // S20b: Myntra is on again (read through the card rescue, app.js), Croma is paused in app.js
 // view.js gives the store line text; the app adds the plain reason for a store that is off and the short error for a store that failed.
 function lineText(run, text) {
@@ -203,7 +203,9 @@ async function readPage(wt, url, func, o) {
     while (Date.now() - t0 < loadMs) { var g = await wt.tabs.get(id); if (g.status === 'complete') break; await sleep(250); }
     await sleep(settleMs);
     var r = await wt.scripting.executeScript({ target: { tabId: id }, func: func, args: o.args || [] });
-    return { ok: true, result: r && r[0] ? r[0].result : null };
+    var extra = [], th = o.then || []; // S21e: more page functions in the SAME page, one after another (Croma: type the pincode, then read the cards)
+    for (var k = 0; k < th.length; k++) { await sleep(th[k].settleMs || 0); var rk = await wt.scripting.executeScript({ target: { tabId: id }, func: th[k].func, args: th[k].args || [] }); extra.push(rk && rk[0] ? rk[0].result : null); }
+    return { ok: true, result: r && r[0] ? r[0].result : null, results: extra };
   } catch (e) {
     return { ok: false, error: String((e && e.message) || e) };
   } finally {
@@ -359,7 +361,7 @@ function buildReport(p) {
   L.push('', 'RESULT ROWS (store | price | title)');
   (p.rows || []).forEach(function (r) { L.push('- ' + r.store + ' | ' + (r.price || '-') + ' | ' + String(r.title || '').slice(0, 70)); });
   if (!(p.rows || []).length) L.push('- (none)');
-  [['DIAGNOSTIC', p.diag], ['CROMA PINCODE PROBE (read only, nothing typed)', p.croma], ['ALL LISTINGS READ (per store: in result or not | price | where the title came from | title)', p.listings], ['PAGE STRUCTURE', p.struct], ['CARD RESCUE (S14-1g)', p.rescue], ['OFFERS FROM PRODUCT PAGES', p.offers]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
+  [['DIAGNOSTIC', p.diag], ['CROMA PINCODE (page probe, then what the app typed and clicked)', p.croma], ['ALL LISTINGS READ (per store: in result or not | price | where the title came from | title)', p.listings], ['PAGE STRUCTURE', p.struct], ['CARD RESCUE (S14-1g)', p.rescue], ['OFFERS FROM PRODUCT PAGES', p.offers]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
   return L.join('\n');
 }
 
@@ -371,7 +373,8 @@ function money(n) { return '\u20b9' + String(n).replace(/\B(?=(\d{3})+(?!\d))/g,
 // S18f (V-307): the report must stay short enough to paste in one message: the html around the first price word, not the start of the card
 function regionOf(html, n) { var t = String(html || '').replace(/\s+/g, ' '), i = t.search(/a-price|a-offscreen|\u20B9|&#8377;|price/i); return i >= 0 ? '...' + t.slice(Math.max(0, i - 100), i + n) : t.slice(0, n); }
 // Pure. One block per store that gave a snapshot: header (cards read, parsed, skipped by reason), every parsed listing (in result or not | price | title source | title, max 30), up to 5 skipped ads with their text. parse = SmartSetu.parseSearch (the same parser for every store).
-function listingLines(runs, rows, parse) {
+function listingLines(runs, rows, parse, why) {
+  why = why || {}; // S21e (V-385): url -> the engine's own reason, so 'not in result' is no longer a guess (Meesho Rs 467)
   var inRes = {}, out = [];
   (rows || []).forEach(function (r) { if (r && r.url) inRes[normUrl(r.url)] = 1; });
   (runs || []).forEach(function (r) {
@@ -381,7 +384,7 @@ function listingLines(runs, rows, parse) {
     var sk = Object.keys(p.skipped || {}).map(function (k) { return k + ' ' + p.skipped[k]; }).join(', ');
     out.push('Store ' + r.store + ': ' + cards.length + ' cards read, ' + (p.cards || []).length + ' parsed, skipped: ' + (sk || 'none'));
     (p.cards || []).slice(0, 30).forEach(function (c) {
-      out.push('- ' + (inRes[normUrl(c.url)] ? 'in result' : 'not in result') + ' | ' + (c.priceNow == null ? 'no price' : money(c.priceNow)) + ' | ' + (c.titleSource || '?') + ' | ' + String(c.title || '(no title)').slice(0, 90));
+      out.push('- ' + (inRes[normUrl(c.url)] ? 'in result' : 'not in result' + (why[normUrl(c.url)] ? ' (' + why[normUrl(c.url)] + ')' : '')) + ' | ' + (c.priceNow == null ? 'no price' : money(c.priceNow)) + ' | ' + (c.titleSource || '?') + ' | ' + String(c.title || '(no title)').slice(0, 90));
     });
     var np = 0; // S14-1i (D-091): the cut html of the first 2 parsed listings without a price, every store, so the real card shape is visible
     (p.cards || []).forEach(function (c) {
@@ -535,6 +538,54 @@ function pincodeLines(res) {
   r.snippets.forEach(function (t) { out.push('text near pincode: ' + t); });
   return out;
 }
+// S21e (owner 15 Nov: any pincode, the listing does not change): Croma shows no products until a pincode is set. This page function types CROMA_PIN into the pincode field and presses the nearby apply button. It touches only that one field, reads no member data, and returns every step so the report shows what happened.
+var CROMA_PIN = '400001';
+async function pincodeSet(pin) {
+  var wait = function (ms) { return new Promise(function (r) { setTimeout(r, ms); }); }, steps = [];
+  var vis = function (e) { var r = e.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
+  var txt = function (e) { return String(e.innerText || e.textContent || e.getAttribute('aria-label') || e.value || '').replace(/\s+/g, ' ').trim(); };
+  var field = function () { return Array.prototype.slice.call(document.querySelectorAll('input')).filter(function (e) { return vis(e) && /pin\s?code/i.test((e.placeholder || '') + ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.id || '')); })[0] || null; };
+  var f = field();
+  if (!f) {
+    var op = Array.prototype.slice.call(document.querySelectorAll('button,a,[role=button],div,span')).filter(function (e) { return vis(e) && e.children.length < 3 && /^(add|enter|update) pin\s?code$/i.test(txt(e)); })[0];
+    if (op) { try { op.click(); steps.push('opened: ' + txt(op).slice(0, 30)); } catch (_) {} await wait(1200); f = field(); } else steps.push('no pincode opener found');
+  }
+  if (!f) return { found: false, steps: steps, after: '' };
+  steps.push('field found: placeholder ' + String(f.placeholder || '-').slice(0, 30));
+  try { f.focus(); var d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value'); d.set.call(f, pin); ['input', 'change', 'keyup'].forEach(function (n) { f.dispatchEvent(new Event(n, { bubbles: true })); }); } catch (e) { steps.push('typing failed: ' + String(e && e.message).slice(0, 40)); }
+  await wait(700);
+  steps.push('field now holds: ' + String(f.value || '').slice(0, 10));
+  var scope = f, btn = null;
+  for (var up = 0; up < 5 && scope && !btn; up++) {
+    scope = scope.parentElement; if (!scope) break;
+    btn = Array.prototype.slice.call(scope.querySelectorAll('button,a,[role=button],input[type=submit],input[type=button]')).filter(function (e) { return vis(e) && /apply|update|submit|check|confirm|save|continue|proceed|^go$|add pin\s?code|^set/i.test(txt(e)); })[0] || null;
+  }
+  if (btn) { try { btn.click(); steps.push('clicked: ' + txt(btn).slice(0, 30)); } catch (_) {} } else steps.push('no apply button near the field');
+  try { ['keydown', 'keypress', 'keyup'].forEach(function (n) { f.dispatchEvent(new KeyboardEvent(n, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); }); steps.push('Enter sent'); } catch (_) {}
+  await wait(3500);
+  var body = String((document.body && document.body.innerText) || '').replace(/\s+/g, ' '), m = body.match(/.{0,40}(?:pin\s?code|deliver\w*).{0,60}/i);
+  return { found: true, steps: steps, after: m ? m[0] : '', fieldStill: !!field() };
+}
+// Reads Croma: opens the search page, sets the pincode, then reads the cards in the same page. Never throws. Same run shape as rescueRead, plus run.pin (what happened).
+async function pinRead(wt, store, query, pin, o) {
+  o = o || {};
+  var t0 = Date.now(), res = await readPage(wt, store.url(query), pincodeSet, { settleMs: 5000, args: [pin], then: [{ func: cardRescue, args: [o.waitMs == null ? 1200 : o.waitMs], settleMs: 2500 }] });
+  var base = { store: store.label, key: store.key, ms: Date.now() - t0, slow: true, retried: true, rescued: true };
+  if (!res || !res.ok) { var rr = await rescueRead(wt, store, query, o); rr.pin = { used: pin, error: String((res && res.error) || 'no answer').slice(0, 100) }; return rr; }
+  var pre = res.result || {}, r = res.results && res.results[0], cards = r && Array.isArray(r.cards) ? r.cards : [];
+  base.pin = { used: pin, found: !!pre.found, steps: pre.steps || [], after: pre.after || '', fieldStill: !!pre.fieldStill };
+  if (!r) return Object.assign(base, { state: 'error', error: 'no card read after the pincode step', rescue: null });
+  if (!cards.length) return Object.assign(base, { state: 'no_cards', cards: 0, rescue: r });
+  var snap = { v: 1, kind: 'search', query: query, url: r.url, title: r.title, time: new Date().toISOString(), metas: [], ldJson: [], cards: cards, priceBoxes: [], struckBoxes: [], clickTexts: [], offerBoxes: [], pageOfferLines: [], pageAvailLines: [], probe: 'app-pin-0.10.13' };
+  return Object.assign(base, { state: 'ok', cards: cards.length, snapshot: snap, rescue: { url: r.url, leaves: r.leaves, outcome: r.outcome, dump: [] } });
+}
+function pinLines(run) {
+  var p = run && run.pin; if (!p) return ['Croma pincode: not tried in this run'];
+  var out = ['Croma pincode ' + p.used + ' | result: ' + (run.state === 'ok' ? 'FOUND ' + run.cards + ' cards' : run.state) + (p.error ? ' | page script failed: ' + p.error : '') + (p.found === false ? ' | pincode field NOT found' : '')];
+  (p.steps || []).forEach(function (s) { out.push('step: ' + s); });
+  if (p.after) out.push('page text after: ' + p.after); if (p.fieldStill) out.push('pincode field still visible after the step');
+  return out.concat(rescueLines(run.store, run));
+}
 function rescueLines(label, run) {
   var r = run && run.rescue;
   if (!r) return [label + ' rescue: ' + (run && run.error ? 'could not read (' + String(run.error).slice(0, 80) + ')' : 'no answer')];
@@ -547,5 +598,5 @@ var api = { readyCount: readyCount, createWebTabs: createWebTabs, detailOf: deta
   sameSite: sameSite, failingLabels: failingLabels, enabledOnly: enabledOnly, mergeRuns: mergeRuns, pickProduct: pickProduct, pickFromView: pickFromView, rowsOf: rowsOf, readPage: readPage,
   offerProbe: offerProbe, structureProbe: structureProbe, offerLines: offerLines, structLines: structLines, buildReport: buildReport,
   timedOutLabels: timedOutLabels, listingLines: listingLines, scrollPage: scrollPage, slowRead: slowRead, isTileLine: isTileLine,
-  cardRescue: cardRescue, rescueRead: rescueRead, rescueLines: rescueLines, pincodeProbe: pincodeProbe, pincodeLines: pincodeLines };
+  cardRescue: cardRescue, rescueRead: rescueRead, rescueLines: rescueLines, pincodeProbe: pincodeProbe, pincodeLines: pincodeLines, pincodeSet: pincodeSet, pinRead: pinRead, pinLines: pinLines, CROMA_PIN: CROMA_PIN, normUrl: normUrl };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;

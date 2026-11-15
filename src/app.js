@@ -11,9 +11,9 @@ var M = require('./storemap.js');
 var NF = require('./nativefetch.js');
 var Dev = require('./devtest.js');
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.12';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.13';
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
-var PAUSED = { Croma: 'Not available yet' };
+var PAUSED = {};
 function $(id) { return document.getElementById(id); }
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -189,7 +189,6 @@ function runStores(tabs, o) { return R.runAll(tabs, o); }
 var SKIP_BY_WORDS = false;
 function plan(q, only) {
   var kill = W.enabledMap(), pick = M.pick(q, R.STORES), enabled = {}, why = {}, skipped = [];
-  kill.Croma = false;
   R.STORES.forEach(function (s) {
     var on = kill[s.label] !== false;
     if (SKIP_BY_WORDS && on && pick.skip[s.key]) { why[s.label] = pick.skip[s.key]; skipped.push(s.label); on = false; }
@@ -211,7 +210,7 @@ async function startRun(q, only) {
     else { only.forEach(function (l) { if (pl.enabled[l]) setRow(l, 'wait', 'Waiting...', true); }); $('progress').classList.add('running'); maxDone = 0; refreshBar(); }
     retry = false;
     function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, perStoreMs: 50000, retryTimeouts: false }; }
-    var pass1 = Object.assign({}, pl.enabled); pass1.Myntra = false; // S20b: Myntra is read on its own after the others (card rescue, below), it does not hold up the rest
+    var pass1 = Object.assign({}, pl.enabled); pass1.Myntra = false; pass1.Croma = false; // S20b: Myntra is read on its own after the others (card rescue, below), it does not hold up the rest
     var o1 = opts(pass1); o1.fetchFirst = SmartSetuFetchRead.STORES_OK; o1.fetchRead = fr; o1.fetchMs = 9000;
     tabs = W.createWebTabs(pluginApi(), { ready: true });
     out = await runStores(tabs, o1);
@@ -222,7 +221,13 @@ async function startRun(q, only) {
       var mr = await W.rescueRead(tabs2, storeOf('Myntra'), q, {});
       W.mergeRuns(out, { runs: [mr] }); updateProgress(mr); adopt([mr]); liveRender();
     }
-    var notMyntra = function (l) { return l !== 'Myntra'; };
+    if (pl.enabled.Croma) { // S21e: Croma needs a pincode before it shows products; the app types a fixed one (owner: the listing does not change), see W.pincodeSet
+      say('Checking Croma...');
+      tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
+      var cr = await W.pinRead(tabs2, storeOf('Croma'), q, W.CROMA_PIN, {});
+      W.mergeRuns(out, { runs: [cr] }); updateProgress(cr); adopt([cr]); liveRender();
+    }
+    var notMyntra = function (l) { return l !== 'Myntra' && l !== 'Croma'; };
     var bad = W.failingLabels(out.runs).filter(notMyntra);
     if (bad.length) {
       say('Checking ' + bad.join(', ') + ' again...');

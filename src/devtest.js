@@ -23,12 +23,13 @@ function fastLine(r) {
 async function runFull(env, log) {
   var R = env.R, W = env.W, V = env.V, C = env.C, M = env.M, q = env.query() || 'iphone 17 pro', t0 = Date.now(), ua = C.desktopUa(navigator.userAgent);
   var notes = [], fast = [], struct = [], rescue = [], listings = [], croma = [], offers = [], rows = [], runs = [], tabs = null, tabs2 = null, err = null;
-  var pickInfo = M.pick(q, R.STORES);
+  var tm = { t0: t0 }, pickInfo = M.pick(q, R.STORES), why = {};
+  try { /* S21e (V-386): the real screen insets and page height, so a bar overlap can be judged from numbers */ var de = document.documentElement, cs0 = getComputedStyle(de), pr = document.createElement('div'); pr.style.cssText = 'position:absolute;visibility:hidden;padding-bottom:env(safe-area-inset-bottom,0px);padding-top:env(safe-area-inset-top,0px)'; document.body.appendChild(pr); var pcs = getComputedStyle(pr); notes.push('INSETS: css var top ' + (cs0.getPropertyValue('--safe-area-inset-top') || '-') + ' bottom ' + (cs0.getPropertyValue('--safe-area-inset-bottom') || '-') + ' | env top ' + pcs.paddingTop + ' bottom ' + pcs.paddingBottom + ' | innerHeight ' + window.innerHeight + ' | screen ' + screen.height + ' | page height ' + de.scrollHeight + ' | scrollY ' + Math.round(window.scrollY)); document.body.removeChild(pr); } catch (e) { notes.push('INSETS line failed: ' + String(e && e.message).slice(0, 60)); }
   notes.push('Category pick: ' + (pickInfo.cats.join(', ') || 'none (every store is checked)') + ' | would open: ' + pickInfo.keys.join(', ') + ' | would skip: ' + (Object.keys(pickInfo.skip).join(', ') || 'none') + ' (this test opens ALL stores)');
   try { var pq = env.SmartSetu.query.parse(q); notes.push('ENGINE: query v' + env.SmartSetu.query.version + ' | parser v' + env.SmartSetu.parser.version + ' | app ' + (env.version || '?') + ' | parsed ' + JSON.stringify({ kidsQ: pq.kidsQ, sub: pq.sub, gender: pq.gender, age: pq.age, cat: pq.cat && pq.cat.term, winter: pq.winter, extras: pq.extras, models: pq.models, maxPrice: pq.maxPrice })); } catch (e) { notes.push('ENGINE line failed: ' + String(e && e.message).slice(0, 80)); }
   try {
     log('Step 1 of 3: fast read of every store...');
-    var nf = env.NF.makeFetch(env.http, ua), fr = env.fetchRead;
+    var nf = env.NF.makeFetch(env.http, ua), fr = env.fetchRead, frm = fr.make(nf, env.SnapDoc.snapFromHtml);
     var lines = await Promise.all(R.STORES.map(async function (s) {
       var t1 = Date.now(), r = { label: s.label, ms: 0, flags: [], head: '', cards: 0 };
       try {
@@ -40,19 +41,26 @@ async function runFull(env, log) {
       r.ms = Date.now() - t1; return fastLine(r);
     }));
     fast = lines;
-    log('Step 2 of 3: every store in a hidden page, one after another (this takes minutes)...');
-    tabs = W.createWebTabs(env.pluginApi());
-    var out = await R.runAll(tabs, { query: q, enabled: {}, foreground: false, rereads: 2, rereadMs: 2500, collect: env.collect, maxTabs: 1, perStoreMs: 50000, retryTimeouts: false, onUpdate: function (r) { log('Step 2 of 3: ' + r.store + ' ' + r.state); } });
+    tm.fast = Date.now();
+    log('Step 2 of 3: the stores, the same way a normal Compare reads them...'); // S21e: same path as the app (fast read first, Myntra and Croma on their own), so this report shows what a member gets
+    tabs = W.createWebTabs(env.pluginApi(), { ready: true });
+    var out = await R.runAll(tabs, { query: q, enabled: { Myntra: false, Croma: false }, foreground: false, rereads: 2, rereadMs: 2500, collect: env.collect, maxTabs: 1, perStoreMs: 50000, retryTimeouts: false, fetchFirst: fr.STORES_OK, fetchRead: frm, fetchMs: 9000, onUpdate: function (r) { log('Step 2 of 3: ' + r.store + ' ' + r.state); } });
+    tabs2 = W.createWebTabs(env.pluginApi(ua), { ready: true });
+    var mst = R.STORES.filter(function (s) { return s.key === 'myntra'; })[0], cst = R.STORES.filter(function (s) { return s.key === 'croma'; })[0];
+    if (mst) { log('Step 2 of 3: Myntra...'); W.mergeRuns(out, { runs: [await W.rescueRead(tabs2, mst, q, {})] }); }
+    if (cst) { log('Step 2 of 3: Croma (pincode)...'); var crr = await W.pinRead(tabs2, cst, q, W.CROMA_PIN, {}); W.mergeRuns(out, { runs: [crr] }); croma = W.pinLines(crr); }
+    tm.stores = Date.now();
     runs = out.runs;
     var res = env.SmartSetu.compareAny({ query: q, searches: out.snapshots, products: [], seenAt: out.seenAt }), view = V.buildView(res, runs, out.seenAt);
     try { var tc = {}; (res.quarantine || []).forEach(function (x) { var k = tc[x.store] = tc[x.store] || { t3: 0, t2: 0, miss: 0 }; if (x.tier === 3) k.t3++; else if (x.tier === 2) { k.t2++; if (x.miss) k.miss++; } }); notes.push('TIERS per store (tier 3 / tier 2 / tier 2 close) ' + JSON.stringify(tc) + ' | counts ' + JSON.stringify(res.counts) + ' | similar ' + JSON.stringify(res.similar && res.similar.counts)); } catch (_) {}
     try { rows = (W.rowsOf(view) || []).map(function (r) { return { store: r.store, price: r.price, title: r.title }; }); } catch (_) {}
-    try { listings = W.listingLines(runs, W.rowsOf(view), env.SmartSetu.parseSearch); } catch (e) { listings = ['(listing lines failed: ' + String(e && e.message).slice(0, 80) + ')']; }
+    try { (res.quarantine || []).forEach(function (x) { if (!x || !x.url) return; var elig = x.tier === 3 || (x.tier === 2 && x.miss), okr = x.reason === 'no_model_token' || x.reason === 'no_brand_in_query'; why[W.normUrl(x.url)] = 'tier ' + x.tier + (x.miss ? ' close' : '') + ', ' + x.reason + ', ' + (elig && okr ? 'eligible: beyond the top 5 or a duplicate' : 'kept out by the engine rule'); }); } catch (_) {}
+    try { listings = W.listingLines(runs, W.rowsOf(view), env.SmartSetu.parseSearch, why); } catch (e) { listings = ['(listing lines failed: ' + String(e && e.message).slice(0, 80) + ')']; }
     log('Step 3 of 3: page structure of every store that gave no listings...');
     var bad = runs.filter(function (r) { return r.state !== 'ok'; });
-    tabs2 = W.createWebTabs(env.pluginApi(ua));
+    tm.pre3 = Date.now();
     for (var i = 0; i < bad.length; i++) {
-      var st = R.STORES.filter(function (s) { return s.key === bad[i].key; })[0]; if (!st) continue;
+      var st = R.STORES.filter(function (s) { return s.key === bad[i].key; })[0]; if (!st || st.key === 'croma') continue; // Croma has its own pincode steps above
       log('Step 3 of 3: ' + st.label + '...');
       var pr = await W.readPage(tabs2, st.url(q), W.structureProbe, { settleMs: 4000 });
       struct = struct.concat(W.structLines(st.label, pr));
@@ -61,7 +69,8 @@ async function runFull(env, log) {
       if (rr.state === 'ok' && rr.snapshot) { try { rescue = rescue.concat(W.listingLines([rr], [], env.SmartSetu.parseSearch)); } catch (e) { rescue.push(st.label + ' rescue listings failed: ' + String(e && e.message).slice(0, 80)); } } // S20b (V-317): what the rescued cards turn into
     }
     var cs = R.STORES.filter(function (s) { return s.key === 'croma'; })[0];
-    if (cs) { log('Step 3 of 3: Croma pincode form (read only)...'); croma = W.pincodeLines(await W.readPage(tabs2, cs.url(q), W.pincodeProbe, { settleMs: 6000 })); }
+    if (cs) { log('Step 3 of 3: Croma pincode form (read only)...'); croma = croma.concat(['--- the pincode page as first seen, nothing typed ---'], W.pincodeLines(await W.readPage(tabs2, cs.url(q), W.pincodeProbe, { settleMs: 6000 }))); }
+    tm.step3 = Date.now();
     log('Step 4: offers from one product page per store...'); // S20b (V-296): bank offers, coupons, EMI as each store shows them; report only
     for (var j = 0; j < R.STORES.length; j++) {
       var so = R.STORES[j], orun = runs.filter(function (x) { return x.key === so.key; })[0];
@@ -73,6 +82,7 @@ async function runFull(env, log) {
     }
   } catch (e) { err = e; }
   finally { try { if (tabs) tabs.dispose(); if (tabs2) tabs2.dispose(); } catch (_) {} }
+  tm.end = Date.now(); notes.push('TIMING (s): fast read ' + Math.round(((tm.fast || tm.t0) - tm.t0) / 1000) + ' | stores ' + Math.round(((tm.stores || tm.fast || tm.t0) - (tm.fast || tm.t0)) / 1000) + ' | structure and rescue reads ' + Math.round(((tm.step3 || tm.end) - (tm.pre3 || tm.step3 || tm.end)) / 1000) + ' | offers ' + Math.round((tm.end - (tm.step3 || tm.end)) / 1000));
   var diag = notes.concat(['FAST READ (no page, phone network layer, desktop identity)'], fast, ['', 'HIDDEN PAGE (per store: page state when no listings)']);
   runs.forEach(function (r) { if (r.diag) diag.push(r.store + ' | ' + JSON.stringify(r.diag)); });
   return W.buildReport({ version: env.version, query: q, seenAt: new Date().toISOString(), totalS: Math.round((Date.now() - t0) / 1000), ua: navigator.userAgent, error: err && (err.message || err), runs: runs, rows: rows, diag: diag, struct: struct, rescue: rescue, listings: listings, croma: croma, offers: offers });
