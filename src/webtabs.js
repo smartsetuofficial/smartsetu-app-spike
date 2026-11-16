@@ -361,7 +361,7 @@ function buildReport(p) {
   L.push('', 'RESULT ROWS (store | price | title)');
   (p.rows || []).forEach(function (r) { L.push('- ' + r.store + ' | ' + (r.price || '-') + ' | ' + String(r.title || '').slice(0, 70)); });
   if (!(p.rows || []).length) L.push('- (none)');
-  [['DIAGNOSTIC', p.diag], ['CROMA PINCODE (page probe, then what the app typed and clicked)', p.croma], ['ALL LISTINGS READ (per store: in result or not | price | where the title came from | title)', p.listings], ['PAGE STRUCTURE', p.struct], ['CARD RESCUE (S14-1g)', p.rescue], ['OFFERS FROM PRODUCT PAGES', p.offers]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
+  [['DIAGNOSTIC', p.diag], ['CROMA PINCODE (page probe, then what the app typed and clicked)', p.croma], ['OFFERS FROM PRODUCT PAGES', p.offers], ['ALL LISTINGS READ (per store: in result or not | price | where the title came from | title)', p.listings], ['PAGE STRUCTURE', p.struct], ['CARD RESCUE (S14-1g)', p.rescue]].forEach(function (x) { L.push('', x[0]); (x[1] && x[1].length ? x[1] : ['- (none)']).forEach(function (l) { L.push(l); }); });
   return L.join('\n');
 }
 
@@ -395,7 +395,7 @@ function listingLines(runs, rows, parse, why) {
       out.push('- no-price price-region ' + np + ' | ' + (pi >= 0 ? 'html around the first price word (char ' + pi + '): ' + rh.slice(Math.max(0, pi - 120), pi + 450) : 'no price word anywhere in the card html'));
     });
     var n = 0;
-    cards.forEach(function (c) { if (n >= 30 || !c || !(c.sponsored || c.ad)) return; n++; var lk = String(c.link || ''), tx = plainText(c.html), why = []; /* S20d (V-351, every store): why each card was flagged */ if (/\/sspa\/click/i.test(lk)) why.push('link has /sspa/click'); else if (/sponsored/i.test(lk)) why.push('link has sponsored'); if (/sponsored/i.test(tx)) why.push('text has Sponsored'); if (c.ad) why.push('own line AD'); out.push('- skipped ad | #' + n + ' | why: ' + (why.join(' + ') || 'flag set by the page reader') + ' | ' + (/\u20B9\s?\d|Rs\.?\s?\d/.test(tx) ? 'has a price' : 'no price') + ' | ' + tx.slice(0, 140)); });
+    cards.forEach(function (c) { if (n >= 3 || !c || !(c.sponsored || c.ad)) return; /* S22a: 3 per store, the count is in the store header */ n++; var lk = String(c.link || ''), tx = plainText(c.html), why = []; /* S20d (V-351, every store): why each card was flagged */ if (/\/sspa\/click/i.test(lk)) why.push('link has /sspa/click'); else if (/sponsored/i.test(lk)) why.push('link has sponsored'); if (/sponsored/i.test(tx)) why.push('text has Sponsored'); if (c.ad) why.push('own line AD'); out.push('- skipped ad | #' + n + ' | why: ' + (why.join(' + ') || 'flag set by the page reader') + ' | ' + (/\u20B9\s?\d|Rs\.?\s?\d/.test(tx) ? 'has a price' : 'no price') + ' | ' + tx.slice(0, 90)); });
     // S21a (V-362): every listing whose price pair the parser corrected or dropped (card.dbg), with the card text, max 6 per store
     (p.cards || []).filter(function (c) { return c && c.dbg; }).slice(0, 6).forEach(function (c) {
       var rawD = cards.filter(function (x) { return x && normUrl(x.link) === normUrl(c.url); })[0];
