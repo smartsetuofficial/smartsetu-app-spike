@@ -31,6 +31,7 @@
     </div>
     <button id="go" class="btn" type="submit"><span id="golabel">Compare</span><svg class="bchev" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><path d="M9 5l7 7-7 7" fill="none" stroke="currentColor" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
   </form>
+  <button id="cardsbtn" class="cardsbtn" type="button" aria-expanded="false" aria-controls="cardspanel">My cards</button>
   <p class="try"><span>Why SmartSetu?</span></p>
   <ul class="perks">
     <li><svg class="pic" viewBox="0 0 64 64" aria-hidden="true" focusable="false"><defs><linearGradient id="q1r" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#FFF4B0"/><stop offset=".5" stop-color="#FFC83A"/><stop offset="1" stop-color="#C46A00"/></linearGradient><radialGradient id="q1f" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#FFF1A6"/><stop offset=".55" stop-color="#FFC21F"/><stop offset="1" stop-color="#E08600"/></radialGradient><linearGradient id="q1e" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#D98A00"/><stop offset="1" stop-color="#8A4B00"/></linearGradient><radialGradient id="q1g" cx=".35" cy=".3" r=".9"><stop offset="0" stop-color="#7CF0B8"/><stop offset=".6" stop-color="#12B981"/><stop offset="1" stop-color="#047857"/></radialGradient></defs><ellipse cx="32" cy="60" rx="22" ry="3.4" fill="#001A66" opacity=".28"/><circle cx="28" cy="34" r="22" fill="url(#q1e)"/><circle cx="28" cy="30.5" r="22" fill="url(#q1r)"/><circle cx="28" cy="30.5" r="17.6" fill="url(#q1f)" stroke="#B86B00" stroke-width="1.4"/><circle cx="28" cy="30.5" r="14.4" fill="none" stroke="#FFF3B0" stroke-width=".9" opacity=".7"/><g fill="none" stroke-linecap="round" stroke-linejoin="round"><path d="M21 21.5h14M21 26h14M22.5 21.5h5a5 5 0 010 10h-5l10 10.5" stroke="#FFF6C8" stroke-width="3.6" opacity=".9" transform="translate(.8 .9)"/><path d="M21 21.5h14M21 26h14M22.5 21.5h5a5 5 0 010 10h-5l10 10.5" stroke="#9A5400" stroke-width="3.2"/></g><path d="M13 22c4-8 12-11 20-10" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" opacity=".6"/><path d="M52 6l1.8 4.2L58 12l-4.2 1.8L52 18l-1.8-4.2L46 12l4.2-1.8z" fill="#FFF8CC"/><circle cx="47" cy="46" r="12.5" fill="url(#q1g)" stroke="#fff" stroke-width="2.4"/><path d="M47 39.5v12M41.8 47l5.2 5.2 5.2-5.2" fill="none" stroke="#fff" stroke-width="3.2" stroke-linecap="round" stroke-linejoin="round"/><path d="M40 41c2-3 5-4.5 8-4.5" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity=".45"/></svg><span class="pt"><strong>Save More</strong><span class="pd">Get the lowest price across multiple stores.</span></span></li>
@@ -43,6 +44,12 @@
 </div>
 <main class="wrap">
   <p id="msg" class="msg" role="status" aria-live="polite"></p>
+  <section id="cardspanel" class="card cardspanel" hidden aria-label="My cards">
+    <h2>My cards</h2>
+    <p class="note">Tick the banks whose cards you use. This list stays on this phone. SmartSetu uses it only to estimate the bank offers a store shows on its own product page.</p>
+    <ul id="cardlist" class="cardlist"></ul>
+    <button id="cardsdone" class="btn ghost" type="button">Done</button>
+  </section>
   <section id="progress" class="card" hidden aria-label="Store progress">
     <div class="phead"><span class="ring" aria-hidden="true"><svg viewBox="0 0 48 48" width="46" height="46"><circle cx="24" cy="24" r="19" fill="none" stroke="#BFE6D3" stroke-width="5"/><circle cx="24" cy="24" r="19" fill="none" stroke="#06976E" stroke-width="5" stroke-linecap="round" stroke-dasharray="90 120" transform="rotate(-90 24 24)"/><path d="M15.5 24.5l6 6 11-12" fill="none" stroke="#06976E" stroke-width="4.2" stroke-linecap="round" stroke-linejoin="round"/></svg></span><div class="ptext"><h2>Checking stores</h2><p id="pcount" class="pcount"></p></div></div>
     <div id="pbar" class="pbar" role="progressbar" aria-label="Stores checked" aria-valuemin="0" aria-valuemax="9" aria-valuenow="0"><span id="pfill"></span></div>

@@ -174,7 +174,7 @@ function pageUndef() { return undefined; }
   ok(dF.lines.join('|') === 'MRP \u20b91,34,900.00 (Inclusive of all taxes)4% OFF|10% up to Rs.15000 Instant Discount with IndusInd Bank Credit Card EMI|Flat Rs. 7000 Instant Discount with Kotak Bank Credit Card EMI|Save upto \u20b917,500|Amazon Pay ICICI Bank Credit Card|EMI \u20b926,118 x 6m|Extra 35% off on First Order|Premium EMI plans available', 'F2 offerProbe keeps offer lines and drops prose, titles and bare labels (premium is not EMI)');
   var viewF = { top: null, groups: [{ rows: [{ store: 'Reliance Digital', url: 'https://www.reliancedigital.in/product/x' }, { store: 'Amazon', url: 'http://www.amazon.in/dp/B0HTTP' }, { store: 'Amazon', url: 'https://www.amazon.in/dp/B0X' }] }, { rows: [{ store: 'Croma', url: 'https://evil.example/p' }] }] };
   ok(W.pickFromView(viewF, 'Amazon', 'https://www.amazon.in/s?k=a').url === 'https://www.amazon.in/dp/B0X' && W.pickFromView(viewF, 'Reliance Digital', 'https://www.reliancedigital.in/search').url === 'https://www.reliancedigital.in/product/x', 'F3 pickFromView takes the first https matched row of that store');
-  ok(!/readOffers|W\.pickFromView|W\.offerProbe|W\.pickProduct\(/.test(read('src/app.js')), 'F3b release app opens no product page and reads no offers (D-093)');
+  ok(!/readOffers|W\.pickFromView|W\.pickProduct\(/.test(read('src/app.js')) && (read('src/app.js').match(/W\.offerProbe/g) || []).length === 1, 'F3b release app opens a product page only in runOffers, after the result is drawn (D-093 lifted by D-117, S22b-2)');
   ok(W.pickFromView(viewF, 'Croma', 'https://www.croma.com/s') === null && W.pickFromView(viewF, 'Flipkart', 'https://www.flipkart.com/s') === null && W.pickFromView(null, 'Amazon', 'https://www.amazon.in/s') === null && W.pickFromView({ top: { rows: [{ store: 'Ajio', url: 'https://www.ajio.com/p/1' }] }, groups: [] }, 'Ajio', 'https://www.ajio.com/s').url === 'https://www.ajio.com/p/1', 'F3 no matched row, other site or no view gives null; the top table rows count');
   var pD = mockPlugin(), wD = W.createWebTabs(pD.api);
   await wD.tabs.create({ url: 'https://a.test/' }); var tD2 = await wD.tabs.create({ url: 'https://b.test/' }); await wD.tabs.remove(tD2.id); wD.dispose(); await sleep(5);
@@ -257,7 +257,7 @@ function pageUndef() { return undefined; }
   W.mergeRuns(outM, { runs: [sH] });
   ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
   var appH = read('src/app.js');
-  ok(/VERSION = '0\.10\.14'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && !/'3rd try'|'2nd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try (no try label on the member screen, R13), one runAll inside runStores, 2 callers');
+  ok(/VERSION = '0\.10\.15'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && !/'3rd try'|'2nd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try (no try label on the member screen, R13), one runAll inside runStores, 2 callers');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -388,11 +388,11 @@ function pageUndef() { return undefined; }
   if (fs.existsSync(ext)) ok(['pagesnap.js', 'bundle.js', 'runner_core.js', 'view.js', 'compare.css'].every(function (f) { return sha12(path.join(www, f)) === sha12(path.join(ext, f)); }), 'D1 www copies equal the extension files');
   var cfg = JSON.parse(read('capacitor.config.json')), pkg = JSON.parse(read('package.json')), appjs = read('src/app.js'), html = read('www/index.html'), yml = read('.github/workflows/apk.yml');
   ok(cfg.appId === 'in.smartsetu.app' && cfg.appName === 'SmartSetu' && cfg.webDir === 'www', 'D2 app id and name (D-080)');
-  ok(pkg.version === '0.10.14' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.14, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
+  ok(pkg.version === '0.10.15' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.15, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
-  ok(appjs.indexOf('innerHTML') < 0 && appjs.indexOf('localStorage') < 0 && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, no storage, no network call, no eval');
+  ok(appjs.indexOf('innerHTML') < 0 && (appjs.match(/localStorage/g) || []).length === 1 && /OF\.loadCards\(store\)/.test(appjs) && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, storage only for the member own card list (D-117, S22b-2), no network call, no eval');
   ok((appjs.match(/\.runAll\(/g) || []).length === 1 && (appjs.match(/runStores\(/g) || []).length === 3 && appjs.indexOf('await runStores(') > appjs.indexOf('async function startRun') && (appjs.match(/startRun\(/g) || []).length === 3 && /addEventListener\('submit', onSubmit\)/.test(appjs) && /getElementById\('morebtn'\)|\$\('morebtn'\)\.addEventListener\('click'/.test(appjs), 'D5 stores start only inside startRun, reached only from the Compare submit or the also-check tap (D-010)');
-  ok(/customUserAgent/.test(appjs) && !/readOffers|structureProbe|offerProbe/.test(appjs) && /desktopUa\(navigator\.userAgent\)/.test(appjs) && /retry && run\.state === 'off'/.test(appjs), 'D6b second try kept, structure and offers reads gone');
+  ok(/customUserAgent/.test(appjs) && !/readOffers|structureProbe/.test(appjs) && (appjs.match(/offerProbe/g) || []).length === 1 && /async function runOffers/.test(appjs) && /desktopUa\(navigator\.userAgent\)/.test(appjs) && /retry && run\.state === 'off'/.test(appjs), 'D6b second try kept, structure and offers reads gone');
   ok(/maxTabs: 1/.test(appjs) && /foreground: false/.test(appjs) && /enabledMap\(\)/.test(appjs), 'D6 one store at a time, hidden, Myntra off');
   var order = ['bundle.js', 'pagesnap.js', 'runner_core.js', 'view.js', 'app.js'].map(function (f) { return html.indexOf('src="' + f + '"'); });
   ok(order.every(function (x, i) { return x >= 0 && (i === 0 || x > order[i - 1]); }), 'D7 index.html loads the 5 scripts in order');
@@ -435,7 +435,7 @@ function pageUndef() { return undefined; }
   ok(html.indexOf('href="compare.css"') >= 0 && html.indexOf('href="app.css"') > html.indexOf('href="compare.css"') && html.indexOf('name="theme-color"') > 0 && /id="pbar"[^>]*role="progressbar"/.test(html) && html.indexOf('id="pcount"') > 0 && html.indexOf('id="pfill"') > 0, 'U11 index.html loads app.css after compare.css, has the progress bar and theme colour');
   ok(!/https?:\/\/(?!www\.w3\.org)/.test(css) && !/https?:\/\/(?!www\.w3\.org)/.test(html) && !/@import/.test(css) && !/url\((?!fonts\/Inter-(Regular|Medium|Bold)\.woff2\)|fonts\/Inter-ExtraBoldItalic\.woff\)|"data:image\/svg\+xml)/.test(css), 'U12 app.css and index.html call no other host (only the 4 bundled Inter files and one inline svg icon)');
   ok(/prefers-reduced-motion/.test(css) && cmpCss.indexOf('.ic') < 0, 'U13 reduced motion respected, shared compare.css left alone');
-  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.14'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
+  ok(/require\('\.\/uihelp\.js'\)/.test(appjs) && /U\.shortLine\(/.test(appjs) && /U\.splitGroups\(/.test(appjs) && /U\.doneCount\(/.test(appjs) && /classList\.remove\('running'\)/.test(appjs) && /VERSION = '0\.10\.15'/.test(appjs), 'U14 app.js uses the helpers, stops the progress animation in finally');
   function pngSize(f) { var b = fs.readFileSync(f); return b.slice(0, 8).toString('hex') === '89504e470d0a1a0a' ? [b.readUInt32BE(16), b.readUInt32BE(20)] : null; }
   var resDir = path.join(__dirname, 'resources', 'android', 'res'), fgS = { mdpi: 108, hdpi: 162, xhdpi: 216, xxhdpi: 324, xxxhdpi: 432 }, lgS = { mdpi: 48, hdpi: 72, xhdpi: 96, xxhdpi: 144, xxxhdpi: 192 };
   var iconsOk = Object.keys(fgS).every(function (d) {
@@ -516,7 +516,7 @@ function pageUndef() { return undefined; }
     var az7 = or7.runs.filter(function (r) { return r.store === 'Amazon'; })[0];
     ok(az7 && az7.state === 'ok' && az7.ms < 1500 && Date.now() - t7 < 2000 && wr7.earlyCount() === 1, 'R7 real runner: a store whose load event never comes is read in ' + (az7 && az7.ms) + ' ms, not after the 4000 ms load limit'); wr7.dispose();
   }
-  ok(/createWebTabs\(pluginApi\(\), \{ ready: true \}\)/.test(appjs) && (appjs.match(/\{ ready: true \}/g) || []).length === 6 && /function readyCount/.test(read('src/webtabs.js')), 'R8 app turns the ready option on for all six webtabs objects (first pass, second try, slow read, rescue, Myntra, Croma)');
+  ok(/createWebTabs\(pluginApi\(\), \{ ready: true \}\)/.test(appjs) && (appjs.match(/\{ ready: true \}/g) || []).length === 7 && /function readyCount/.test(read('src/webtabs.js')), 'R8 app turns the ready option on for all seven webtabs objects (first pass, second try, slow read, rescue, Myntra, Croma, offers)');
 
   // L: S15b (D-097) premium look: bigger type, glow, trust strip, stronger cards. Every claim on the screen is checked against the real code.
   var SMq = require('./src/storemap.js'), cssL = read('www/app.css'), htmlL = read('www/index.html');

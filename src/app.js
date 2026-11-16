@@ -10,8 +10,10 @@ var U = require('./uihelp.js');
 var M = require('./storemap.js');
 var NF = require('./nativefetch.js');
 var Dev = require('./devtest.js');
+var OF = require('./offerflow.js').make({ parser: SmartSetu.parser, adapter: SmartSetu.adapter, offers: SmartSetu.offers, isTileLine: W.isTileLine }); // S22b-2: offers under result rows (D-117)
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.14';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.15';
+var cards = [], offerRaw = {}, offerTok = 0, lastView = null; // member's own cards (phone only), offer lines read from product pages (by listing url), run token, last drawn view
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = {};
 function $(id) { return document.getElementById(id); }
@@ -83,7 +85,7 @@ function linkTo(r, cls, label) {
 }
 function bestBlock(r, sv) {
   var b = el('div', 'best'), top = el('div', 'btop');
-  top.appendChild(el('span', 'badge', 'Lowest price found')); top.appendChild(el('span', 'bstore', r.store)); b.appendChild(top);
+  top.appendChild(el('span', 'badge', 'Lowest listed price')); top.appendChild(el('span', 'bstore', r.store)); b.appendChild(top);
   var pr = el('div', 'bprice'); pr.appendChild(el('span', 'bnum', r.price || 'Price not shown'));
   if (r.storeMrp) pr.appendChild(el('span', 'm', 'Store MRP ' + r.storeMrp));
   b.appendChild(pr);
@@ -92,10 +94,12 @@ function bestBlock(r, sv) {
   var a = linkTo(r, 'go', 'Go to ' + r.store); if (a) b.appendChild(a);
   return b;
 }
+function offerRes(r) { return offerRaw[r.url] ? OF.assess(r.store, offerRaw[r.url], r.pricePaise, cards) : null; }
 function addRow(ul, r) {
   var li = el('li', r.isLowest ? 'low' : null), left = el('span', 'l'), right = el('span', 'p');
   left.appendChild(el('span', 's', r.store)); left.appendChild(el('span', 't', r.title));
   if (r.note) left.appendChild(el('span', 'x', r.note));
+  OF.rowLines(offerRes(r)).forEach(function (o) { left.appendChild(el('span', 'of of-' + o.kind, o.text)); });
   right.appendChild(el('span', 'pn', r.price || 'Price not shown'));
   if (r.storeMrp) right.appendChild(el('span', 'm', 'Store MRP ' + r.storeMrp));
   var a = linkTo(r, 'lk', 'Go to store'); if (a) right.appendChild(a);
@@ -105,6 +109,7 @@ function groupCard(g, hideNote) {
   var card = el('article', 'card'), low = g.rows.filter(function (r) { return r.isLowest; })[0];
   card.appendChild(el('h3', null, g.title));
   if (low) card.appendChild(bestBlock(low, U.savings(g.rows)));
+  var gl = OF.groupLowest(g.rows, offerRes); if (gl) card.appendChild(el('p', 'gl', gl.text));
   else if (g.label) card.appendChild(el('span', 'badge', g.label));
   if (g.note && !hideNote && !low) card.appendChild(el('p', 'note', g.note));
   var rest = g.rows.filter(function (r) { return r !== low; });
@@ -119,7 +124,8 @@ function skeleton() {
 
 function render(view, o) {
   o = o || {};
-  var box = $('results'); box.textContent = '';
+  lastView = view;
+  var box = $('results'), wasOpen = !!box.querySelector('details.more[open]'); box.textContent = '';
   $('empty').hidden = true;
   box.appendChild(el('h2', null, view.headline));
   if (o.live) box.appendChild(el('p', 'live', 'Still checking some stores. Prices below can change as more stores finish.'));
@@ -135,7 +141,7 @@ function render(view, o) {
   sp.multi.forEach(function (g) { box.appendChild(groupCard(g, !!sp.multiNote)); });
   if (sp.single.length) {
     var d = el('details', 'more'), sm = el('summary', null, 'Listed at one store only (' + sp.single.length + ')');
-    d.appendChild(sm);
+    d.appendChild(sm); if (wasOpen) d.open = true;
     if (sp.singleNote) d.appendChild(el('p', 'note', sp.singleNote));
     sp.single.forEach(function (g) {
       var sub = el('article', 'sub'), ul = el('ul', 'rows');
@@ -200,6 +206,7 @@ function plan(q, only) {
 
 async function startRun(q, only) {
   if (busy) return;
+  offerTok++; if (!only) offerRaw = {};
   say(''); setBusy(true);
   var tabs = null, tabs2 = null, out = null, pl = plan(q, only), extra = !!only;
   var fr = SmartSetuFetchRead.make(NF.makeFetch(CapacitorHttp, C.desktopUa(navigator.userAgent)), SmartSetuSnapDoc.snapFromHtml);
@@ -262,6 +269,7 @@ async function startRun(q, only) {
     var left = live.skipped.filter(function (l) { return !live.runs[l]; });
     if (left.length) { $('morebtn').textContent = 'Also check ' + left.length + ' other store' + (left.length > 1 ? 's' : '') + ' (' + left.join(', ') + ')'; $('morebox').hidden = false; live.skipped = left; } else $('morebox').hidden = true;
     say('');
+    var myTok = offerTok, finView = fin.view; setTimeout(function () { runOffers(finView, myTok); }, 0); // after the result is on screen, never before the owner taps Compare (D-010)
   } catch (e) {
     say('Something went wrong, nothing was compared. Please try again.');
     if (!allRuns().length) { $('results').textContent = ''; $('empty').hidden = false; }
@@ -271,6 +279,43 @@ async function startRun(q, only) {
   }
 }
 
+// S22b-2: offers of the top listings of each store, read from the store's own product page, one page at a time, after the result is shown. A failure here never touches the result.
+async function runOffers(view, tok) {
+  var t = OF.pickTargets(view).filter(function (x) { return !offerRaw[x.url]; }), wt = null;
+  if (!t.length) return;
+  try {
+    wt = W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
+    for (var i = 0; i < t.length; i++) {
+      if (tok !== offerTok) break;
+      say('Reading store offers (' + (i + 1) + ' of ' + t.length + ')...');
+      var res = await W.readPage(wt, t[i].url, W.offerProbe, { settleMs: 3500, loadMs: 25000 });
+      if (tok !== offerTok) break;
+      var lines = res && res.ok && res.result && Array.isArray(res.result.lines) ? res.result.lines : [];
+      offerRaw[t[i].url] = lines;
+      if (lines.length && lastView) render(lastView);
+    }
+  } catch (_) { /* offers are optional */ } finally {
+    if (wt) { try { wt.dispose(); } catch (_) { /* closed already */ } }
+    if (tok === offerTok && !busy) say('');
+  }
+}
+function refreshCardsBtn() { $('cardsbtn').textContent = cards.length ? 'My cards (' + cards.length + ')' : 'My cards'; }
+function initCards() {
+  var ul = $('cardlist'), store = null;
+  try { store = window.localStorage; } catch (_) { store = null; }
+  if (store) cards = OF.loadCards(store);
+  OF.BANKS.forEach(function (b) {
+    var li = el('li'), lb = el('label'), cb = el('input'); cb.type = 'checkbox'; cb.value = b; cb.checked = cards.indexOf(b) >= 0;
+    cb.addEventListener('change', function () {
+      var on = Array.prototype.filter.call(ul.querySelectorAll('input'), function (x) { return x.checked; }).map(function (x) { return x.value; });
+      cards = store ? OF.saveCards(store, on) : OF.validCards(on); refreshCardsBtn(); if (lastView) render(lastView);
+    });
+    lb.appendChild(cb); lb.appendChild(el('span', null, b)); li.appendChild(lb); ul.appendChild(li);
+  });
+  $('cardsbtn').addEventListener('click', function () { var p = $('cardspanel'); p.hidden = !p.hidden; $('cardsbtn').setAttribute('aria-expanded', p.hidden ? 'false' : 'true'); if (!p.hidden) { try { p.scrollIntoView({ block: 'start' }); } catch (_) { /* older webview */ } } });
+  $('cardsdone').addEventListener('click', function () { $('cardspanel').hidden = true; $('cardsbtn').setAttribute('aria-expanded', 'false'); });
+  refreshCardsBtn();
+}
 function onSubmit(ev) {
   ev.preventDefault();
   if (busy) return;
@@ -280,6 +325,7 @@ function onSubmit(ev) {
 }
 
 document.addEventListener('DOMContentLoaded', function () {
+  initCards();
   $('form').addEventListener('submit', onSubmit);
   var qi = $('q'), qc = $('qclear');
   function syncClear() { qc.hidden = !qi.value; }

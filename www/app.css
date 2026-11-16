@@ -305,3 +305,13 @@ details.more summary::after{display:grid;place-items:center;width:30px;height:30
 #results .rows .m{font-size:11.5px;color:#6A7DA3}
 #results .rows a.lk{min-height:38px;margin-top:2px;padding:0 16px;font-size:14px;font-weight:800;background:linear-gradient(180deg,#3B7BFF,#0B3FBF);box-shadow:0 8px 16px rgba(11,63,191,.36),inset 0 1.5px 0 rgba(255,255,255,.36)}
 @media (max-width:389px){#results .rows .s{font-size:17px}#results .rows .pn{font-size:22px}#results .rows .p{min-width:92px}}
+/* S22b-2 (D-117): My cards chooser and offer lines under result rows. Phone width 434 css px, also 360. */
+.cardsbtn{display:block;margin:12px auto 0;min-height:44px;padding:0 20px;border-radius:var(--r-pill);border:1.5px solid rgba(255,255,255,.6);background:rgba(255,255,255,.14);color:#fff;font-size:15px;font-weight:700}
+.cardspanel h2{margin:0 0 6px;font-size:20px;color:var(--navy)}
+.cardspanel .cardlist{list-style:none;margin:12px 0 14px;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.cardspanel .cardlist label{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--navy);font-size:15px;font-weight:500}
+.cardspanel .cardlist input{width:20px;height:20px;flex:none;accent-color:var(--teal)}
+#results .rows .of{display:block;margin-top:4px;font-size:13px;line-height:1.35;color:#475569}
+#results .rows .of-after{color:#0F6B3A;font-weight:700}
+#results .gl{margin:8px 0 0;font-size:14px;font-weight:700;line-height:1.35;color:#0F6B3A}
+@media (max-width:389px){.cardspanel .cardlist{gap:6px}.cardspanel .cardlist label{padding:0 8px;font-size:14px}}
