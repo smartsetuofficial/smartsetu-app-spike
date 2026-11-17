@@ -306,12 +306,30 @@ details.more summary::after{display:grid;place-items:center;width:30px;height:30
 #results .rows a.lk{min-height:38px;margin-top:2px;padding:0 16px;font-size:14px;font-weight:800;background:linear-gradient(180deg,#3B7BFF,#0B3FBF);box-shadow:0 8px 16px rgba(11,63,191,.36),inset 0 1.5px 0 rgba(255,255,255,.36)}
 @media (max-width:389px){#results .rows .s{font-size:17px}#results .rows .pn{font-size:22px}#results .rows .p{min-width:92px}}
 /* S22b-2 (D-117): My cards chooser and offer lines under result rows. Phone width 434 css px, also 360. */
-.cardsbtn{display:block;margin:12px auto 0;min-height:44px;padding:0 20px;border-radius:var(--r-pill);border:1.5px solid rgba(255,255,255,.6);background:rgba(255,255,255,.14);color:#fff;font-size:15px;font-weight:700}
-.cardspanel h2{margin:0 0 6px;font-size:20px;color:var(--navy)}
-.cardspanel .cardlist{list-style:none;margin:12px 0 14px;padding:0;display:grid;grid-template-columns:1fr 1fr;gap:8px}
-.cardspanel .cardlist label{display:flex;align-items:center;gap:10px;min-height:44px;padding:0 12px;border:1px solid var(--line);border-radius:12px;background:#fff;color:var(--navy);font-size:15px;font-weight:500}
-.cardspanel .cardlist input{width:20px;height:20px;flex:none;accent-color:var(--teal)}
+.cardsrow{display:flex;align-items:center;gap:12px;width:100%;margin:12px 0 0;min-height:60px;padding:8px 14px 8px 10px;border:1px solid rgba(190,214,255,.42);border-radius:18px;background:linear-gradient(180deg,rgba(255,255,255,.17),rgba(255,255,255,.08));box-shadow:0 8px 20px rgba(0,10,60,.26),inset 0 1px 0 rgba(255,255,255,.22);color:#fff;text-align:left;font:inherit}
+.cardsrow:active{transform:translateY(1px)}
+.cardsrow .cr-ico{flex:none;display:grid;place-items:center;width:40px;height:40px;border-radius:12px;background:linear-gradient(180deg,#3C7BFF,#0B3FBF);border:1px solid rgba(255,255,255,.4);box-shadow:0 4px 10px rgba(0,10,60,.35)}
+.cardsrow .cr-txt{flex:1;min-width:0;display:flex;flex-direction:column;gap:2px}
+.cardsrow .cr-t{font-size:16px;font-weight:700;line-height:1.2;color:#fff}
+.cardsrow .cr-s{font-size:13px;line-height:1.3;color:rgba(224,236,255,.88);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.cardsrow .cr-chev{flex:none;color:rgba(255,255,255,.9);transition:transform .18s}
+.cardsrow[aria-expanded="true"] .cr-chev{transform:rotate(90deg)}
+.cardspanel{margin:10px 0 0;padding:16px 14px 12px;border-radius:18px;background:rgba(255,255,255,.96);border:1px solid rgba(255,255,255,.7);box-shadow:0 14px 30px rgba(0,10,60,.36);color:var(--navy)}
+.cardspanel[hidden]{display:none}
+.cardspanel h2{margin:0 0 4px;font-size:18px;line-height:1.25;color:var(--navy)}
+.cardspanel .note{margin:0 0 12px;font-size:13px;line-height:1.45;color:#4B5C86}
+.cardspanel .cardchips{list-style:none;margin:0 0 12px;padding:0;display:flex;flex-wrap:wrap;gap:8px}
+.cardspanel .chip{position:relative;display:block}
+.cardspanel .chip input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.cardspanel .chip span{display:flex;align-items:center;gap:6px;min-height:40px;padding:0 14px;border:1px solid var(--line);border-radius:var(--r-pill);background:#F3F8FF;color:var(--navy);font-size:14.5px;font-weight:600;line-height:1}
+.cardspanel .chip input:checked+span{background:var(--teal);border-color:var(--teal);color:#fff}
+.cardspanel .chip input:checked+span::before{content:"\2713";font-size:13px;font-weight:700}
+.cardspanel .chip input:focus-visible+span{outline:2px solid var(--navy);outline-offset:2px}
+.cardspanel .cp-foot{display:flex;align-items:center;gap:8px;padding-top:10px;border-top:1px solid var(--line)}
+.cardspanel .cp-count{flex:1;font-size:13px;color:#4B5C86}
+.cardspanel .cp-clear{min-height:40px;padding:0 12px;border:0;background:none;color:var(--teal);font-size:14px;font-weight:700}
+.cardspanel .cp-done{min-height:40px;padding:0 22px;border:0;border-radius:var(--r-pill);background:linear-gradient(180deg,#2F6BFF,#0B3FBF);color:#fff;font-size:14px;font-weight:700;box-shadow:0 6px 14px rgba(11,63,191,.35)}
 #results .rows .of{display:block;margin-top:4px;font-size:13px;line-height:1.35;color:#475569}
 #results .rows .of-after{color:#0F6B3A;font-weight:700}
 #results .gl{margin:8px 0 0;font-size:14px;font-weight:700;line-height:1.35;color:#0F6B3A}
-@media (max-width:389px){.cardspanel .cardlist{gap:6px}.cardspanel .cardlist label{padding:0 8px;font-size:14px}}
+@media (max-width:389px){.cardspanel .cardchips{gap:6px}.cardspanel .chip span{padding:0 11px;font-size:14px}.cardsrow .cr-t{font-size:15px}.cardsrow .cr-s{font-size:12.5px}}

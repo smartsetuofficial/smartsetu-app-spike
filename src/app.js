@@ -12,7 +12,7 @@ var NF = require('./nativefetch.js');
 var Dev = require('./devtest.js');
 var OF = require('./offerflow.js').make({ parser: SmartSetu.parser, adapter: SmartSetu.adapter, offers: SmartSetu.offers, isTileLine: W.isTileLine }); // S22b-2: offers under result rows (D-117)
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.16';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.17';
 var cards = [], offerRaw = {}, offerTok = 0, lastView = null; // member's own cards (phone only), offer lines read from product pages (by listing url), run token, last drawn view
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = {};
@@ -299,21 +299,27 @@ async function runOffers(view, tok) {
     if (tok === offerTok && !busy) say('');
   }
 }
-function refreshCardsBtn() { $('cardsbtn').textContent = cards.length ? 'My cards (' + cards.length + ')' : 'My cards'; }
+function cardsLabel(list) { return list.length <= 2 ? list.join(', ') : list.slice(0, 2).join(', ') + ' +' + (list.length - 2) + ' more'; }
+function refreshCardsBtn() {
+  $('cardsub').textContent = cards.length ? cardsLabel(cards) : 'Add your cards to estimate bank offers';
+  $('cardcount').textContent = cards.length ? cards.length + ' selected' : 'None selected';
+  $('cardsclear').hidden = !cards.length;
+}
 function initCards() {
   var ul = $('cardlist'), store = null;
   try { store = window.localStorage; } catch (_) { store = null; }
   if (store) cards = OF.loadCards(store);
+  function apply(on) { cards = store ? OF.saveCards(store, on) : OF.validCards(on); refreshCardsBtn(); if (lastView) render(lastView); }
+  function ticked() { return Array.prototype.filter.call(ul.querySelectorAll('input'), function (x) { return x.checked; }).map(function (x) { return x.value; }); }
   OF.BANKS.forEach(function (b) {
-    var li = el('li'), lb = el('label'), cb = el('input'); cb.type = 'checkbox'; cb.value = b; cb.checked = cards.indexOf(b) >= 0;
-    cb.addEventListener('change', function () {
-      var on = Array.prototype.filter.call(ul.querySelectorAll('input'), function (x) { return x.checked; }).map(function (x) { return x.value; });
-      cards = store ? OF.saveCards(store, on) : OF.validCards(on); refreshCardsBtn(); if (lastView) render(lastView);
-    });
+    var li = el('li'), lb = el('label', 'chip'), cb = el('input'); cb.type = 'checkbox'; cb.value = b; cb.checked = cards.indexOf(b) >= 0;
+    cb.addEventListener('change', function () { apply(ticked()); });
     lb.appendChild(cb); lb.appendChild(el('span', null, b)); li.appendChild(lb); ul.appendChild(li);
   });
-  $('cardsbtn').addEventListener('click', function () { var p = $('cardspanel'); p.hidden = !p.hidden; $('cardsbtn').setAttribute('aria-expanded', p.hidden ? 'false' : 'true'); if (!p.hidden) { try { p.scrollIntoView({ block: 'start' }); } catch (_) { /* older webview */ } } });
-  $('cardsdone').addEventListener('click', function () { $('cardspanel').hidden = true; $('cardsbtn').setAttribute('aria-expanded', 'false'); });
+  function setOpen(open) { var p = $('cardspanel'); p.hidden = !open; $('cardsbtn').setAttribute('aria-expanded', open ? 'true' : 'false'); if (open) { try { p.scrollIntoView({ block: 'nearest', behavior: 'smooth' }); } catch (_) { /* older webview */ } } }
+  $('cardsbtn').addEventListener('click', function () { setOpen($('cardspanel').hidden); });
+  $('cardsdone').addEventListener('click', function () { setOpen(false); });
+  $('cardsclear').addEventListener('click', function () { Array.prototype.forEach.call(ul.querySelectorAll('input'), function (x) { x.checked = false; }); apply([]); });
   refreshCardsBtn();
 }
 function onSubmit(ev) {
