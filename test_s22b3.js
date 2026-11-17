@@ -1,0 +1,38 @@
+/* app-spike / test_s22b3 v1.0.0 (S22b-3, D-118, V-417..). Run: node test_s22b3.js
+ * Source: owner's 0.10.15 report "Samsung 55 inch 4k smart tv" (real titles and real Reliance offer lines) + screenshot.
+ * Found: (1) "4k" was a MODEL, so a TV query ran as a PHONE query (Samsung is a phone brand): Neo/Mini/Ultra words rejected real 55-inch Samsung TVs;
+ * (2) Reliance "5% / 7.5% / 10% Upto N HDFC/ICICI CC*" are price slabs; the app subtracted the best one (10%) as if it were sure; (3) "Possible: Rs X off" did not say bank or coupon;
+ * (4) a "Lowest after your card offers" line was shown for a group of ONE store. No keyword for TV anywhere: the rules are generic. */
+'use strict';
+var path = require('path'), Q = require('../query-engine/query_engine.js'), pass = 0, fail = 0;
+require('./www/bundle.js'); var SS = global.SmartSetu || SmartSetu, OF = require('./src/offerflow.js').make({ parser: SS.parser, adapter: SS.adapter, offers: SS.offers, isTileLine: function () { return false; } });
+function ck(n, c, d) { if (c) pass++; else { fail++; console.log('FAIL ' + n + ' ' + JSON.stringify(d)); } }
+function T(q, t) { var r = Q.analyse(q, { title: t, link: '', priceNum: 45000 }); return r.tier + (r.miss ? 'c' : ''); }
+var q = Q.parse('Samsung 55 inch 4k smart tv');
+ck('1a 4k is a feature word, the query is not a phone query', q.models.length === 0 && q.extras.indexOf('4k') >= 0 && q.phoneQuery === false && q.qty && q.qty.k === 'in' && q.qty.v === 55, [q.models, q.extras, q.phoneQuery, q.qty]);
+var real = ['Samsung 55 inch (138cm) Crystal UHD 4K Vision AI 2026 Smart TV | 30W Speakers', 'Samsung 55 inch (138cm) Mini LED 4K Vision AI 2026 Smart TV | 30W Speakers', 'Samsung 55 inches Neo QLED 4K Samsung Vision AI Smart TV QA55QN70HAULXL', 'Samsung Crystal 4K Vista 138 cm (55 inch) Ultra HD (4K) LED Smart Tizen TV with 4K Upscali', 'Samsung 139 cm (55 inch) QLED Ultra HD (4K) Smart Tizen TV', 'SAMSUNG U8500H 140 cm (55 inch) 3 Star LED 4K Ultra HD Smart Tizen TV with Google Voice As', 'Samsung 138 cm (55 Inch) 4K QLED Smart LED TV (55Q7F)', 'Samsung 138 cm (55 inch) Ultra HD (4K) LED Smart Tizen TV with Crystal Processor 4K,Motion', 'Samsung 139.7 cm (55 inch) Crystal UHD 4K Samsung Vision AI Smart TV, UA55U7900HUXXL'];
+ck('1b every real 55-inch Samsung TV title of the report is an exact match (Mini LED, Neo, Ultra HD included)', real.every(function (t) { return T(q, t) === '3'; }), real.map(function (t) { return T(q, t); }));
+ck('1c other sizes, other brands and covers are not exact', ['Samsung 50 inch (125cm) Crystal UHD 4K Vision AI 2026 Smart TV', 'Samsung 108 cm (43 inches) FHD Smart LED TV UA43F5550FUXXL', 'LG 139 cms (55 inches) NU87 AI Series Nano 4K Ultra HD Smart webOS LED TV', 'Stylista LED TV Cover 55 Inch', 'Samsung Galaxy Watch 6 Bluetooth 44 mm'].every(function (t) { return T(q, t) !== '3'; }), 0);
+var q2 = Q.parse('55 inch tv');
+ck('2a a cover of what you searched is an accessory (TV Cover), a product that comes WITH a stand/strap is not', T(q2, 'Stylista LED TV Cover 55 Inch') === '0' && T(q2, 'Kalra Magic Printed 55 Inch Tv Cover') === '0' && T(q2, 'LG 55 inch Smart TV') === '3' && T(q2, 'Samsung 55 inch 4K Smart TV with Stand') === '3', 0);
+var y = Q.parse('Yoga mat 6mm');
+ck('2b yoga mat WITH carry strap stays, a yoga mat strap is not the mat; asking for the accessory keeps it', T(y, 'CULT Yoga Mat Eva 6Mm Grey/Black With Carry Strap') === '3' && T(y, 'Yoga mat strap 6mm') === '0' && Q.analyse(Q.parse('tv cover 55 inch'), { title: 'Stylista LED TV Cover 55 Inch', link: '', priceNum: 700 }).tier === 3, 0);
+ck('2c 5G, 8K, 1080p are feature words in any query', ['redmi 12 5g', 'monitor 8k', 'camera 1080p'].every(function (s) { return Q.parse(s).models.length === (s.indexOf('redmi') === 0 ? 1 : 0); }), ['redmi 12 5g', 'monitor 8k', 'camera 1080p'].map(function (s) { return Q.parse(s).models; }));
+var ip = Q.parse('iphone 17 pro');
+ck('2d phone rules unchanged: 17 Pro is not 17 Pro Max, not 17 Plus, not Air; variant word elsewhere is fine', T(ip, 'Apple iPhone 17 Pro 256 GB') === '3' && T(ip, 'Apple iPhone 17 Pro Max 256 GB') !== '3' && T(Q.parse('iphone 17'), 'Apple iPhone 17 Pro 256 GB') !== '3' && T(Q.parse('iphone 17'), 'Apple iPhone 17 Plus 256 GB') !== '3', [T(ip, 'Apple iPhone 17 Pro Max 256 GB'), T(Q.parse('iphone 17'), 'Apple iPhone 17 Pro 256 GB')]);
+var qm = Q.parse('samsung 55q7f');
+ck('2e a TV typed by model code (phone brand + model) still accepts "Ultra HD" / "Mini LED" words that do not stand next to the model', qm.phoneQuery === true && T(qm, 'Samsung 138 cm (55 inch) QLED Ultra HD 4K Smart TV (55Q7F)') === '3' && T(qm, 'Samsung 138 cm (55 Inch) 4K Mini LED Smart TV 55Q7F') === '3', [qm.models, T(qm, 'Samsung 138 cm (55 inch) QLED Ultra HD 4K Smart TV (55Q7F)')]);
+// ---- offers: real Reliance lines of the report (55Q7F page) ----
+var REL = ['7.5% Upto 4000 HDFC/ICICI CC*', '5% Upto 1500 HDFC/ICICI CC*', '10% Upto 8000 HDFC/ICICI CC*', '7.5% Instant Discount with Punjab National Bank Credit Card', '5% Instant Discount with IDBI Credit/Debit Card', 'HDFC BANK CREDIT CARD - No Cost EMI', 'Bank Offers', 'Bank Offer', 'No Cost EMI Available from \u20b99,498.33 /- per month.', 'EMI Offers'];
+var P = 5449000, rh = OF.assess('Reliance Digital', REL, P, ['HDFC']);
+ck('3a HDFC ticked: three slabs (5%/7.5%/10%) are NOT subtracted, the range is shown with its limits', rh && !rh.after && rh.possible[0] && rh.possible[0].text === 'Bank offer (HDFC credit card): \u20b91,500 to \u20b95,449 off, depends on the price slab, check the store', rh);
+var rp = OF.assess('Reliance Digital', REL, P, ['Punjab National Bank']);
+ck('3b PNB ticked: one clear line (7.5%, Credit Card, no minimum) is subtracted and says credit card', rp && rp.after && rp.after.bank === 'Punjab National Bank' && rp.after.discountPaise === Math.floor(P * 7.5 / 100) && /^With your Punjab National Bank credit card: /.test(OF.rowLines(rp)[0].text), rp);
+var ri = OF.assess('Reliance Digital', ['5% Instant Discount with IDBI Credit/Debit Card'], P, ['IDBI']);
+ck('3c IDBI "Credit/Debit Card": card type not one of the two, not subtracted, shown as a bank offer', ri && !ri.after && ri.possible.some(function (p) { return /^Bank offer \(IDBI card\)/.test(p.text); }), ri);
+ck('3d ICICI ticked also sees the slab range ("HDFC/ICICI CC*" names both banks)', (function () { var r = OF.assess('Reliance Digital', REL, P, ['ICICI']); return r && !r.after && /ICICI credit card\): \u20b91,500 to/.test(r.possible[0].text); })(), 0);
+ck('3e no card ticked: nothing subtracted, bank offers labelled with their cards', (function () { var r = OF.assess('Reliance Digital', REL, P, []); return r && !r.after && r.possible.every(function (p) { return /^Bank offer \(/.test(p.text); }); })(), 0);
+var rc = OF.assess('Reliance Digital', ['Use Code SAVE200 Flat Rs.200 off coupon', 'Get Rs.500 off on orders'], 3000000, ['HDFC']);
+ck('3f a coupon line says Coupon, and an unlabeled amount says Offer, both outside the price', rc && !rc.after && rc.possible.some(function (p) { return /^Coupon: about/.test(p.text); }), rc);
+ck('3g a group of ONE store gets no "Lowest after your card offers" line, two stores do', (function () { var one = [{ store: 'Reliance Digital', pricePaise: 5449000, url: 'u1' }], two = one.concat([{ store: 'Amazon', pricePaise: 5500000, url: 'u2' }]), resOf = function (r) { return r.store === 'Reliance Digital' ? { after: { bank: 'PNB', effectivePaise: 5000000 } } : null; }; return OF.groupLowest(one, resOf) === null && OF.groupLowest(two, resOf) && OF.groupLowest(two, resOf).store === 'Reliance Digital'; })(), 0);
+console.log('test_s22b3: ' + pass + ' pass, ' + fail + ' fail'); process.exit(fail ? 1 : 0);

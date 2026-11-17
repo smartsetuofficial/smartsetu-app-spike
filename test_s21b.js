@@ -14,7 +14,7 @@ ck('1 specific search: compared listings counted per store (flipkart 9, reliance
 ck('2 stores that were read but have nothing that matches are 0, not missing (myntra, ajio, nykaa, meesho, tatacliq)', a.myntra === 0 && a.ajio === 0 && a.nykaa === 0 && a.meesho === 0 && a.tatacliq === 0, a);
 ck('3 a store whose page gave no data (croma) is not in the map', !Object.prototype.hasOwnProperty.call(a, 'croma'), a);
 var b = rel('smartphone');
-ck('4 general search: similar-product listings counted (amazon 1, meesho 1), others 0', b.amazon === 1 && b.meesho === 1 && b.flipkart === 0, b);
+ck('4 general search: similar-product listings counted (amazon 1), others 0 (S22b-3: Meesho "Apple iPhone 17 pro Cases & Covers" is a case, no longer counted as a smartphone)', b.amazon === 1 && b.meesho === 0 && b.flipkart === 0, b);
 var c = rel('lipstick');
 ck('5 nothing matches anywhere -> every read store is 0', Object.keys(c).every(function (k) { return c[k] === 0; }) && Object.keys(c).length >= 7, c);
 ck('6 line text: 0 / 1 / many', U.relevanceLine(0).text === 'No matching products' && U.relevanceLine(1).text === '1 matching listing' && U.relevanceLine(15).text === '15 matching listings' && U.relevanceLine(0).kind === 'skip' && U.relevanceLine(7).kind === 'ok', [U.relevanceLine(0), U.relevanceLine(1), U.relevanceLine(15)]);
