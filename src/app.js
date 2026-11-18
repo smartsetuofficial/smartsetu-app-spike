@@ -4,6 +4,7 @@
  * Only stores that can sell the product are opened (storemap.js); the screen offers the others. Results are drawn as soon as the first store is read. */
 import { InAppBrowser, InvisibilityMode } from '@capgo/capacitor-inappbrowser';
 import { CapacitorHttp } from '@capacitor/core';
+import { Tokenizer } from '@huggingface/tokenizers'; // S22f-2 part 3 (D-128): tokenizer of the meaning model, runs on the phone
 var W = require('./webtabs.js');
 var C = require('./spike_core.js');
 var U = require('./uihelp.js');
@@ -11,12 +12,48 @@ var M = require('./storemap.js');
 var NF = require('./nativefetch.js');
 var Dev = require('./devtest.js');
 var Car = require('./carousel.js'); // S22g: Why SmartSetu cards slide one by one
+var SEM = require('./semantic.js'), OG = require('./ortglue.js'); // S22f-2 part 3 (D-128): meaning check + glue to onnxruntime-web
 var OF = require('./offerflow.js').make({ parser: SmartSetu.parser, adapter: SmartSetu.adapter, offers: SmartSetu.offers, isTileLine: W.isTileLine }); // S22b-2: offers under result rows (D-117)
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.20';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.21';
 var cards = [], offerRaw = {}, offerTok = 0, lastView = null; // member's own cards (phone only), offer lines read from product pages (by listing url), run token, last drawn view
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = {};
+// ---- S22f-2 part 3 (D-128): MEANING check, AFTER the result is on screen (nothing runs before the tap, the first result never waits for it) ----
+// Start values, NOT measured on a phone (V-492): at most SEM_TITLES titles are embedded and this search waits at most SEM_WAIT_MS for the model. If the model is slow, loading goes on in the background and the NEXT search uses it.
+// Any failure = null = the result stays exactly as it was drawn. The model files come from the app folder (ort/, models/), nothing from the network.
+var semEng = null, semLast = null, SEM_TITLES = 120, SEM_WAIT_MS = 30000;
+function semEngine() {
+  if (!semEng) semEng = SEM.make(OG.makeDeps(OG.webConfig(window, Tokenizer)), { deviceMemory: navigator.deviceMemory });
+  return semEng;
+}
+function semDiag() { // one plain line for the owner-only store test report (devtest.js)
+  try { return semLast ? JSON.stringify({ last: semLast, engine: semEng ? semEng.state() : null }) : 'no meaning check ran yet (do a normal Compare first)'; } catch (e) { return 'unreadable'; }
+}
+async function semRefine(seenAt, gen) { // -> { view, ... } when the meaning check added close matches, else null
+  var t0 = Date.now(), titles = [], gaveUp = false, st = semEng ? semEng.state() : null;
+  semLast = { q: live.q, at: new Date(t0).toISOString() };
+  if (st && (st.status === 'failed' || st.status === 'lowmem')) { semLast.skipped = st.status + ': ' + st.reason; return null; }
+  try {
+    // 1) a probe that knows no similarity: the engine output is the same as without the check, the probe only notes which titles the engine would ask about
+    buildNow(seenAt, { sim: function (t) { if (typeof t === 'string' && titles.length < SEM_TITLES && titles.indexOf(t) < 0) titles.push(t); } });
+    semLast.asked = titles.length;
+    if (titles.length < 3) { semLast.skipped = 'fewer than 3 titles to check'; return null; }
+    var Qe = SmartSetu.query, qt = Qe.semText(Qe.parse(live.q));
+    say('Checking more matches...');
+    var sem = await new Promise(function (resolve) {
+      var timer = setTimeout(function () { gaveUp = true; resolve(null); }, SEM_WAIT_MS);
+      semEngine().prepare(qt, titles, function () { return gen !== runGen || gaveUp; }).then(function (s) { clearTimeout(timer); resolve(s); }, function () { clearTimeout(timer); resolve(null); });
+    });
+    semLast.ms = Date.now() - t0; semLast.gaveUp = gaveUp; semLast.engine = semEngine().state();
+    if (!sem || gen !== runGen) return null;
+    semLast.info = sem.info;
+    var b = buildNow(seenAt, sem), si = b.res && b.res.semInfo;
+    semLast.pool = si ? si.pool : 0; semLast.rescued = si ? si.rescued : 0;
+    return si && si.rescued > 0 ? b : null;
+  } catch (e) { semLast.error = String((e && e.message) || e).slice(0, 120); return null; }
+}
+// ---- end S22f-2 part 3 ----
 function $(id) { return document.getElementById(id); }
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -171,11 +208,11 @@ function paintRelevance(res, runs) {
     });
   } catch (_) { /* the plain store line stays */ }
 }
-function buildNow(seenAt) {
+function buildNow(seenAt, sem) { // sem is optional (S22f-2 part 3); left out = the engine ranks exactly as before
   var runs = allRuns(), snaps = runs.filter(function (r) { return r.snapshot; }).map(function (r) { return r.snapshot; });
-  var res = SmartSetu.compareAny({ query: live.q, searches: snaps, products: [], seenAt: seenAt }), v = V.buildView(res, runs, seenAt);
+  var res = SmartSetu.compareAny({ query: live.q, searches: snaps, products: [], seenAt: seenAt, sem: sem }), v = V.buildView(res, runs, seenAt);
   paintRelevance(res, runs);
-  return { view: v, snaps: snaps.length };
+  return { view: v, snaps: snaps.length, res: res };
 }
 // Results are drawn as soon as a store has listings, and again (at most every 0.4 s) when more stores finish. A failure here never stops the run.
 function liveRender() {
@@ -286,7 +323,12 @@ async function startRun(q, only) {
     var left = live.skipped.filter(function (l) { return !live.runs[l]; });
     if (left.length) { $('morebtn').textContent = 'Also check ' + left.length + ' other store' + (left.length > 1 ? 's' : '') + ' (' + left.join(', ') + ')'; $('morebox').hidden = false; live.skipped = left; } else $('morebox').hidden = true;
     say('');
-    var myTok = offerTok, finView = fin.view; setTimeout(function () { runOffers(finView, myTok); }, 0); // after the result is on screen, never before the owner taps Compare (D-010)
+    var finView = fin.view; // S22f-2 part 3: meaning check after the result is shown; if it adds close matches the screen is drawn once more
+    var sb = await semRefine(out.seenAt, gen);
+    if (gen !== runGen) return;
+    if (sb) { finView = sb.view; render(finView); }
+    say('');
+    var myTok = offerTok; setTimeout(function () { runOffers(finView, myTok); }, 0); // after the result is on screen, never before the owner taps Compare (D-010)
   } catch (e) {
     if (gen !== runGen) return;
     say('Something went wrong, nothing was compared. Please try again.');
@@ -367,5 +409,5 @@ document.addEventListener('DOMContentLoaded', function () {
     ev.preventDefault();
     InAppBrowser.open({ url: u });
   });
-  Dev.attach({ trigger: $('logo'), isBusy: function () { return busy; }, setBusy: setBusy, query: function () { return $('q').value.trim(); }, version: VERSION, R: R, V: V, W: W, C: C, M: M, NF: NF, http: CapacitorHttp, pluginApi: pluginApi, collect: smartsetuCollect, SmartSetu: SmartSetu, SnapDoc: SmartSetuSnapDoc, fetchRead: SmartSetuFetchRead });
+  Dev.attach({ trigger: $('logo'), isBusy: function () { return busy; }, setBusy: setBusy, query: function () { return $('q').value.trim(); }, version: VERSION, R: R, V: V, W: W, C: C, M: M, NF: NF, http: CapacitorHttp, pluginApi: pluginApi, collect: smartsetuCollect, SmartSetu: SmartSetu, SnapDoc: SmartSetuSnapDoc, fetchRead: SmartSetuFetchRead, semDiag: semDiag });
 });
