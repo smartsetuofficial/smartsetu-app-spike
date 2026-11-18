@@ -10,9 +10,10 @@ var U = require('./uihelp.js');
 var M = require('./storemap.js');
 var NF = require('./nativefetch.js');
 var Dev = require('./devtest.js');
+var Car = require('./carousel.js'); // S22g: Why SmartSetu cards slide one by one
 var OF = require('./offerflow.js').make({ parser: SmartSetu.parser, adapter: SmartSetu.adapter, offers: SmartSetu.offers, isTileLine: W.isTileLine }); // S22b-2: offers under result rows (D-117)
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.19';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.20';
 var cards = [], offerRaw = {}, offerTok = 0, lastView = null; // member's own cards (phone only), offer lines read from product pages (by listing url), run token, last drawn view
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = {};
@@ -35,7 +36,7 @@ function pluginApi(ua) {
 }
 
 function say(t) { $('msg').textContent = t || ''; }
-function setBusy(b) { busy = b; $('go').disabled = b; $('golabel').textContent = b ? 'Comparing...' : 'Compare'; }
+function setBusy(b) { busy = b; $('go').disabled = false; /* S22g: the button stays active, a new search cancels the running one */ $('golabel').textContent = b ? 'Comparing...' : 'Compare'; }
 
 // ---- progress ----
 function setRow(label, kind, text, active) {
@@ -204,8 +205,17 @@ function plan(q, only) {
   return { enabled: enabled, why: only ? {} : why, skipped: skipped, pick: pick };
 }
 
+// S22g (D-124): a new search while one is running cancels the old one (its pages are closed, its late answers are ignored), the person never waits.
+function mkTabs(ua) { var t = W.createWebTabs(ua ? pluginApi(ua) : pluginApi(), { ready: true }); activeTabs.push(t); return t; }
+function cancelRun() {
+  runGen++; offerTok++; retry = false;
+  var a = activeTabs; activeTabs = [];
+  a.forEach(function (t) { try { t.dispose(); } catch (_) { /* closed already */ } });
+  if (offerWt) { try { offerWt.dispose(); } catch (_) { /* closed already */ } offerWt = null; }
+}
 async function startRun(q, only) {
-  if (busy) return;
+  if (busy) { if (only || q === live.q) { if (!only) say('Already comparing this search...'); return; } cancelRun(); } else if (offerWt) cancelRun();
+  var gen = ++runGen;
   offerTok++; if (!only) offerRaw = {};
   say(''); setBusy(true);
   var tabs = null, tabs2 = null, out = null, pl = plan(q, only), extra = !!only;
@@ -216,22 +226,25 @@ async function startRun(q, only) {
     if (!extra) { live.runs = {}; skeleton(); $('morebox').hidden = true; initProgress(pl); }
     else { only.forEach(function (l) { if (pl.enabled[l]) setRow(l, 'wait', 'Waiting...', true); }); $('progress').classList.add('running'); maxDone = 0; refreshBar(); }
     retry = false;
-    function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, perStoreMs: 50000, retryTimeouts: false }; }
+    function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { if (gen !== runGen) return; updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, perStoreMs: 50000, retryTimeouts: false }; }
     var pass1 = Object.assign({}, pl.enabled); pass1.Myntra = false; pass1.Croma = false; // S20b: Myntra is read on its own after the others (card rescue, below), it does not hold up the rest
     var o1 = opts(pass1); o1.fetchFirst = SmartSetuFetchRead.STORES_OK; o1.fetchRead = fr; o1.fetchMs = 9000;
-    tabs = W.createWebTabs(pluginApi(), { ready: true });
+    tabs = mkTabs();
     out = await runStores(tabs, o1);
+    if (gen !== runGen) return;
     adopt(out.runs);
     if (pl.enabled.Myntra) {
       say('Checking Myntra...');
-      tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
+      tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
       var mr = await W.rescueRead(tabs2, storeOf('Myntra'), q, {});
+      if (gen !== runGen) return;
       W.mergeRuns(out, { runs: [mr] }); updateProgress(mr); adopt([mr]); liveRender();
     }
     if (pl.enabled.Croma) { // S21e: Croma needs a pincode before it shows products; the app types a fixed one (owner: the listing does not change), see W.pincodeSet
       say('Checking Croma...');
-      tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
+      tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
       var cr = await W.pinRead(tabs2, storeOf('Croma'), q, W.CROMA_PIN, {});
+      if (gen !== runGen) return;
       W.mergeRuns(out, { runs: [cr] }); updateProgress(cr); adopt([cr]); liveRender();
     }
     var notMyntra = function (l) { return l !== 'Myntra' && l !== 'Croma'; };
@@ -239,26 +252,30 @@ async function startRun(q, only) {
     if (bad.length) {
       say('Checking ' + bad.join(', ') + ' again...');
       retry = true;
-      tabs2 = W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
-      W.mergeRuns(out, await runStores(tabs2, opts(W.enabledOnly(R.STORES, bad))));
+      tabs2 = mkTabs(C.desktopUa(navigator.userAgent));
+      var rb = await runStores(tabs2, opts(W.enabledOnly(R.STORES, bad)));
+      if (gen !== runGen) return;
+      W.mergeRuns(out, rb);
       retry = false; adopt(out.runs); liveRender();
     }
     var slowL = late() ? [] : W.timedOutLabels(out.runs); // a store that timed out gets one more try with a long wait and scrolling (every store, D-073)
     if (slowL.length) {
-      tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
+      tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
       for (var sl = 0; sl < slowL.length; sl++) {
         say('Still checking ' + slowL[sl] + '...');
         var sr = await W.slowRead(tabs2, storeOf(slowL[sl]), q, smartsetuCollect, {});
+        if (gen !== runGen) return;
         W.mergeRuns(out, { runs: [sr] }); updateProgress(sr); adopt([sr]); liveRender();
       }
     }
     var empty = W.failingLabels(out.runs).filter(notMyntra); // a store that is still empty gets a card rescue read (every store, D-073)
     if (late()) empty = []; // the run has already taken long: show what is there instead of more tries
     if (empty.length) {
-      tabs2 = tabs2 || W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
+      tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
       for (var em = 0; em < empty.length; em++) {
         say('Still checking ' + empty[em] + '...');
         var rr = await W.rescueRead(tabs2, storeOf(empty[em]), q, {});
+        if (gen !== runGen) return;
         if (rr.state === 'ok') { W.mergeRuns(out, { runs: [rr] }); updateProgress(rr); adopt([rr]); }
       }
     }
@@ -271,11 +288,15 @@ async function startRun(q, only) {
     say('');
     var myTok = offerTok, finView = fin.view; setTimeout(function () { runOffers(finView, myTok); }, 0); // after the result is on screen, never before the owner taps Compare (D-010)
   } catch (e) {
+    if (gen !== runGen) return;
     say('Something went wrong, nothing was compared. Please try again.');
     if (!allRuns().length) { $('results').textContent = ''; $('empty').hidden = false; }
   } finally {
-    if (live.timer) { clearTimeout(live.timer); live.timer = 0; }
-    if (tabs) tabs.dispose(); if (tabs2) tabs2.dispose(); retry = false; $('progress').classList.remove('running'); setBusy(false);
+    if (tabs) { try { tabs.dispose(); } catch (_) { /* closed already */ } } if (tabs2) { try { tabs2.dispose(); } catch (_) { /* closed already */ } }
+    if (gen === runGen) { // a cancelled run must not touch the screen of the newer run
+      if (live.timer) { clearTimeout(live.timer); live.timer = 0; }
+      activeTabs = []; retry = false; $('progress').classList.remove('running'); setBusy(false);
+    }
   }
 }
 
@@ -284,7 +305,7 @@ async function runOffers(view, tok) {
   var t = OF.pickTargets(view).filter(function (x) { return !offerRaw[x.url]; }), wt = null;
   if (!t.length) return;
   try {
-    wt = W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true });
+    wt = W.createWebTabs(pluginApi(C.desktopUa(navigator.userAgent)), { ready: true }); offerWt = wt;
     for (var i = 0; i < t.length; i++) {
       if (tok !== offerTok) break;
       say('Reading store offers (' + (i + 1) + ' of ' + t.length + ')...');
@@ -295,7 +316,7 @@ async function runOffers(view, tok) {
       if (lines.length && lastView) render(lastView);
     }
   } catch (_) { /* offers are optional */ } finally {
-    if (wt) { try { wt.dispose(); } catch (_) { /* closed already */ } }
+    if (wt) { try { wt.dispose(); } catch (_) { /* closed already */ } } if (offerWt === wt) offerWt = null;
     if (tok === offerTok && !busy) say('');
   }
 }
@@ -324,7 +345,6 @@ function initCards() {
 }
 function onSubmit(ev) {
   ev.preventDefault();
-  if (busy) return;
   var q = $('q').value.trim();
   if (!q) { say('Type what you want to buy, for example "boAt Airdopes 141".'); return; }
   startRun(q, null);
@@ -332,10 +352,11 @@ function onSubmit(ev) {
 
 document.addEventListener('DOMContentLoaded', function () {
   initCards();
+  try { Car.make(document.querySelector('.perks'), document, window); } catch (_) { /* the slider is only decoration */ }
   $('form').addEventListener('submit', onSubmit);
   var qi = $('q'), qc = $('qclear');
   function syncClear() { qc.hidden = !qi.value; }
-  qi.addEventListener('input', syncClear); qc.addEventListener('click', function () { qi.value = ''; syncClear(); qi.focus(); }); syncClear();
+  qi.addEventListener('input', function () { syncClear(); if (busy) $('golabel').textContent = (qi.value.trim() && qi.value.trim() !== live.q) ? 'Compare this instead' : 'Comparing...'; }); qc.addEventListener('click', function () { qi.value = ''; syncClear(); qi.focus(); }); syncClear();
   $('morebtn').addEventListener('click', function () { if (!busy && live.skipped.length) startRun(live.q, live.skipped.slice()); });
   Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (c) { c.addEventListener('click', function () { $('q').value = c.getAttribute('data-q') || ''; $('q').focus(); }); });
   // A store link opens in the phone's own browser window (Chrome Custom Tab), not inside the app page.

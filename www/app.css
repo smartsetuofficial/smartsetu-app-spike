@@ -333,3 +333,24 @@ details.more summary::after{display:grid;place-items:center;width:30px;height:30
 #results .rows .of-after{color:#0F6B3A;font-weight:700}
 #results .gl{margin:8px 0 0;font-size:14px;font-weight:700;line-height:1.35;color:#0F6B3A}
 @media (max-width:389px){.cardspanel .cardchips{gap:6px}.cardspanel .chip span{padding:0 11px;font-size:14px}.cardsrow .cr-t{font-size:15px}.cardsrow .cr-s{font-size:12.5px}}
+
+/* ===== S22g (D-124): fit on every phone width, and the "Why SmartSetu?" cards slide one by one ===== */
+html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
+.top .wrap{flex-wrap:wrap;row-gap:8px}
+.logo{min-width:0;max-width:100%}
+.hero .wrap{min-width:0}
+.perks{display:flex;gap:14px;margin:8px -14px -22px;padding:6px 14px 38px;overflow-x:auto;overflow-y:hidden;scroll-snap-type:x mandatory;scrollbar-width:none;-webkit-overflow-scrolling:touch;overscroll-behavior-x:contain}
+.perks::-webkit-scrollbar{display:none}
+.perks li{flex:0 0 100%;max-width:100%;box-sizing:border-box;scroll-snap-align:center;flex-direction:column;justify-content:center;gap:8px;min-height:190px;padding:22px 20px 32px;text-align:center}
+.perks.js li{opacity:.55;transform:scale(.96);transition:opacity .35s ease,transform .35s ease}
+.perks.js li.on{opacity:1;transform:none}
+.perks .pic{width:92px;height:92px}
+.perks .pt{align-items:center;text-align:center}
+.perks strong{font-size:22px;line-height:1.15;white-space:normal}
+.perks .pd{font-size:15px;line-height:1.35;margin-top:6px;max-width:26ch}
+.pdots{display:flex;justify-content:center;gap:9px;margin:4px 0 2px}
+.pdots button{position:relative;width:8px;height:8px;padding:0;border:0;border-radius:99px;background:rgba(255,255,255,.42);transition:width .3s ease,background .3s ease;cursor:pointer}
+.pdots button::after{content:"";position:absolute;inset:-9px -5px}
+.pdots button.on{width:24px;background:#FFB020}
+@media (max-width:359px){.perks li{min-height:176px;padding:18px 14px 28px}.perks .pic{width:80px;height:80px}.perks strong{font-size:20px}.perks .pd{font-size:14px}}
+@media (prefers-reduced-motion:reduce){.perks.js li{transition:none}.pdots button{transition:none}}

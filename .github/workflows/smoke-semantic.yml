@@ -1,0 +1,37 @@
+name: Semantic smoke test on the real model (S22f-2)
+on:
+  workflow_dispatch:
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    env:
+      HF: https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/018218219718cc217663562b0a65b5ffd1339d47
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install
+        run: npm ci --no-audit --no-fund
+      - name: Download model files from the pinned commit and check sha256 (D-123, V-448)
+        run: |
+          mkdir -p models
+          curl -fL --retry 3 -o models/model_quantized.onnx "$HF/onnx/model_quantized.onnx"
+          curl -fL --retry 3 -o models/tokenizer.json "$HF/tokenizer.json"
+          curl -fL --retry 3 -o models/tokenizer_config.json "$HF/tokenizer_config.json"
+          cat > models.sha256 <<'SUMS'
+          66fc00f5f29afcaff34092e1bdd20008ca3918265a82fb9695a551e510cc4ebc  models/model_quantized.onnx
+          b60b6b43406a48bf3638526314f3d232d97058bc93472ff2de930d43686fa441  models/tokenizer.json
+          3f5961b9ac86288cccdb97f32fb848d6187c78e1603958c53f3ea1f296b7d8a2  models/tokenizer_config.json
+          SUMS
+          sha256sum -c models.sha256
+          ls -l models
+      - name: Reference token ids (python tokenizers)
+        run: |
+          pip install tokenizers
+          python3 smoke/ref_ids.py
+      - name: Smoke test
+        run: node smoke/smoke_semantic.mjs
+        env:
+          REF: ref_ids.json

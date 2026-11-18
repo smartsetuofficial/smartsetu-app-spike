@@ -6,3 +6,7 @@ www/app.js
 *.jks
 *.keystore
 *.p12
+# S22f-2: model files are downloaded in CI only (never commit 118 MB)
+/models/
+models.sha256
+ref_ids.json
