@@ -35,3 +35,6 @@ jobs:
         run: node smoke/smoke_semantic.mjs
         env:
           REF: ref_ids.json
+      - name: Meaning test, 48 Hinglish / English / Devanagari queries (S22f-2 test 2)
+        if: always()
+        run: node smoke/smoke_pairs.mjs
