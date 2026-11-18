@@ -29,6 +29,25 @@ jobs:
           npm ci --no-audit --no-fund
           npm test
           npm run build
+      - name: Bundle the meaning model and onnxruntime files into www (S22f-2 part 2c)
+        run: |
+          set -e
+          mkdir -p www/ort www/models
+          for f in ort.wasm.min.mjs ort-wasm-simd-threaded.mjs ort-wasm-simd-threaded.wasm; do
+            test -f "node_modules/onnxruntime-web/dist/$f"
+            cp "node_modules/onnxruntime-web/dist/$f" www/ort/
+          done
+          HF=https://huggingface.co/Xenova/paraphrase-multilingual-MiniLM-L12-v2/resolve/018218219718cc217663562b0a65b5ffd1339d47
+          curl -fL --retry 3 -o www/models/model_quantized.onnx "$HF/onnx/model_quantized.onnx"
+          curl -fL --retry 3 -o www/models/tokenizer.json "$HF/tokenizer.json"
+          curl -fL --retry 3 -o www/models/tokenizer_config.json "$HF/tokenizer_config.json"
+          cat > "$RUNNER_TEMP/models.sha256" <<'SUMS'
+          66fc00f5f29afcaff34092e1bdd20008ca3918265a82fb9695a551e510cc4ebc  www/models/model_quantized.onnx
+          b60b6b43406a48bf3638526314f3d232d97058bc93472ff2de930d43686fa441  www/models/tokenizer.json
+          3f5961b9ac86288cccdb97f32fb848d6187c78e1603958c53f3ea1f296b7d8a2  www/models/tokenizer_config.json
+          SUMS
+          sha256sum -c "$RUNNER_TEMP/models.sha256"
+          ls -l www/ort www/models
       - name: Add Android project
         run: |
           npx cap add android
@@ -90,4 +109,4 @@ jobs:
         with:
           name: smartsetu-release-apk
           path: smartsetu-release.apk
-          retention-days: 14
+          retention-days: 2

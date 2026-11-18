@@ -10,3 +10,5 @@ www/app.js
 /models/
 models.sha256
 ref_ids.json
+/www/ort/
+/www/models/
