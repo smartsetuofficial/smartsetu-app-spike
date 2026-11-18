@@ -39,7 +39,7 @@ var ads = W.listingLines([{ store: 'Amazon', snapshot: { cards: fl } }], [], fun
 ck('5b 3 ad lines per store, store header still says how many were skipped', ads.length === 3, ads.length);
 // 6. design: 4 new icons, premium block, no best claim
 var h = read('www/index.html'), c = read('www/app.css');
-ck('6a Home: 4 new icons (q1..q4), old i1a..i4a gone, 4 perks cards, texts unchanged', ['q1r', 'q2f', 'q3r', 'q4s'].every(function (s) { return h.indexOf('id="' + s + '"') > 0; }) && !/id="i[1-4]a"/.test(h) && (h.match(/<svg class="pic"/g) || []).length === 4 && /Save More/.test(h) && /Shop Smart/.test(h) && /Check Fast/.test(h) && /100% Private/.test(h), 0);
+ck('6a Home: 7 slide pictures (S22h D-125: 3D webp replaced the SVG icons q1..q4), old i1a..i4a gone, owner texts unchanged', (h.match(/<img class="pic" src="slides\/[a-z]+\.webp"/g) || []).length === 7 && !/id="i[1-4]a"/.test(h) && /Save More/.test(h) && /Shop Smart/.test(h) && /Check Fast/.test(h) && /100% Private/.test(h), 0);
 ck('6b css: S22a block, result rows are cards, price text is dark-on-light (no white text on white)', /S22a \(D-115\)/.test(c) && /#results \.rows li/.test(c) && /#results \.rows \.pn\{[^}]*#0B1F3A/.test(c), 0);
 ck('6c no ranking words in the new css or html (D-024)', !/best pick|winner|\branked?\b/i.test(c.slice(c.indexOf('S22a (D-115)')) + h), 0);
 console.log('test_s22a: ' + pass + ' pass, ' + fail + ' fail');

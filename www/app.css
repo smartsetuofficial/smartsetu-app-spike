@@ -354,3 +354,26 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .pdots button.on{width:24px;background:#FFB020}
 @media (max-width:359px){.perks li{min-height:176px;padding:18px 14px 28px}.perks .pic{width:80px;height:80px}.perks strong{font-size:20px}.perks .pd{font-size:14px}}
 @media (prefers-reduced-motion:reduce){.perks.js li{transition:none}.pdots button{transition:none}}
+
+/* ===== S22h (D-125): Why SmartSetu = 7 slides, 3D coverflow (neighbours tilt back), real 3D pictures (Fluent Emoji 3D, MIT, www/slides) ===== */
+.perks{--sw:min(76vw,340px);gap:8px;padding:10px calc((100vw - var(--sw))/2) 40px;perspective:900px;perspective-origin:50% 40%}
+.perks li{flex:0 0 var(--sw);max-width:var(--sw);min-height:236px;gap:6px;padding:22px 16px 30px;border-radius:26px;scroll-snap-stop:always;transform-style:preserve-3d;backface-visibility:hidden;background:radial-gradient(130px 110px at 50% 32%,var(--acg,rgba(59,130,246,.28)),rgba(255,255,255,0) 72%),linear-gradient(180deg,#FFFFFF 0%,#EEF4FF 52%,#D9E6FF 100%)}
+.perks li:nth-child(1){--acg:rgba(255,176,32,.42)}
+.perks li:nth-child(2){--acg:rgba(59,130,246,.38)}
+.perks li:nth-child(3){--acg:rgba(255,120,60,.36)}
+.perks li:nth-child(4){--acg:rgba(14,165,160,.38)}
+.perks li:nth-child(5){--acg:rgba(168,85,247,.34)}
+.perks li:nth-child(6){--acg:rgba(56,189,248,.4)}
+.perks li:nth-child(7){--acg:rgba(52,211,153,.4)}
+.perks li:nth-child(1)::after{background:#FFB020}.perks li:nth-child(2)::after{background:#3B82F6}.perks li:nth-child(3)::after{background:#FF7A3C}.perks li:nth-child(4)::after{background:#0EA5A0}.perks li:nth-child(5)::after{background:#A855F7}.perks li:nth-child(6)::after{background:#38BDF8}.perks li:nth-child(7)::after{background:#34D399}
+.perks.js li{opacity:.62;transform:scale(.86);transition:transform .55s cubic-bezier(.2,.8,.2,1),opacity .45s ease}
+.perks.js li.prev{transform:rotateY(32deg) scale(.86);transform-origin:100% 50%}
+.perks.js li.next{transform:rotateY(-32deg) scale(.86);transform-origin:0 50%}
+.perks.js li.on{opacity:1;transform:translateZ(0) scale(1)}
+.perks .pic{width:112px;height:112px;max-width:none;padding:0;border-radius:0;background:none;object-fit:contain;filter:drop-shadow(0 16px 10px rgba(0,25,110,.38));transform:translateZ(46px)}
+.perks li.on .pic{animation:s22hfloat 3.4s ease-in-out infinite}
+@keyframes s22hfloat{0%,100%{transform:translateZ(46px) translateY(0)}50%{transform:translateZ(46px) translateY(-7px)}}
+.perks strong{font-size:21px;line-height:1.15;letter-spacing:-.015em;color:#08183A}
+.perks .pd{max-width:24ch;font-size:15px;line-height:1.35;font-weight:600;color:#34507F}
+@media (max-width:359px){.perks{--sw:min(80vw,340px)}.perks li{min-height:212px;padding:18px 12px 28px}.perks .pic{width:92px;height:92px}.perks strong{font-size:19px}.perks .pd{font-size:14px}}
+@media (prefers-reduced-motion:reduce){.perks li.on .pic{animation:none}.perks.js li{transition:none}}

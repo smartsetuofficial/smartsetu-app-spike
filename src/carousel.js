@@ -1,4 +1,4 @@
-/* smartsetu app / carousel v1.0.0 (S22g, D-124). The "Why SmartSetu?" cards on Home slide one by one (auto, and by swipe or dot tap).
+/* smartsetu app / carousel v1.1.0 (S22g D-124, S22h D-125: 3D look = class prev/next on the neighbours).  The "Why SmartSetu?" cards on Home slide one by one (auto, and by swipe or dot tap).
  * Only scrolling, class names and dots. No network, no storage, no data read. Auto slide stops when the person touches it, when the page is hidden,
  * and never starts when the phone asks for reduced motion. Tested in Node with a fake page (test_s22g.js). */
 'use strict';
@@ -32,7 +32,11 @@ function make(ul, doc, win, opt) {
   function step() { return items[1].offsetLeft - items[0].offsetLeft; }
   function mark(i) {
     cur = i;
-    items.forEach(function (it, k) { if (k === i) it.classList.add('on'); else it.classList.remove('on'); });
+    items.forEach(function (it, k) {
+      if (k === i) it.classList.add('on'); else it.classList.remove('on');
+      if (k === i - 1) it.classList.add('prev'); else it.classList.remove('prev');
+      if (k === i + 1) it.classList.add('next'); else it.classList.remove('next');
+    });
     dots.forEach(function (d, k) { if (k === i) { d.classList.add('on'); d.setAttribute('aria-current', 'true'); } else { d.classList.remove('on'); d.removeAttribute('aria-current'); } });
   }
   function go(i, byPerson) {

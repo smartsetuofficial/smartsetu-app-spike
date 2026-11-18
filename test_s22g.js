@@ -1,4 +1,4 @@
-/* test_s22g.js 1.0.0 (S22g, D-124): Why SmartSetu slider (carousel.js, fake page), search-cancel code in app.js, fit rules in app.css. Offline. */
+/* test_s22g.js 1.1.0 (S22g D-124 + S22h D-125: 7 3D slides): Why SmartSetu slider (carousel.js, fake page), search-cancel code in app.js, fit rules in app.css. Offline. */
 'use strict';
 var fs = require('fs'), path = require('path');
 var Car = require('./src/carousel.js');
@@ -90,5 +90,19 @@ ck('app version 0.10.20', /VERSION = '0\.10\.20'/.test(app));
 ck('header wraps instead of overflowing (every width and font size)', /\.top \.wrap\{flex-wrap:wrap/.test(css));
 ck('slider css: snap scroll, one card per view, dots, reduced motion', /\.perks\{display:flex;[^}]*scroll-snap-type:x mandatory/.test(css) && /\.perks li\{flex:0 0 100%/.test(css) && /\.pdots button\.on\{width:24px/.test(css) && /prefers-reduced-motion:reduce\)\{\.perks\.js li/.test(css));
 ck('card texts unchanged (owner texts)', ['Save More', 'Shop Smart', 'Check Fast', '100% Private', 'Get the lowest price across multiple stores.', 'Compare prices side-by-side in seconds.', 'Find the best deal quickly, no hassle.', 'Your search &amp; data stay on your device.'].every(function (s) { return html.indexOf(s) >= 0; }) && html.indexOf('<ul class="perks">') >= 0);
+// S22h (D-125): 7 slides, 3D look, real 3D pictures
+ck('7 slides: 4 owner texts unchanged + 3 new true ones', ['Save More', 'Shop Smart', 'Check Fast', '100% Private', 'Get the lowest price across multiple stores.', 'Compare prices side-by-side in seconds.', 'Find the best deal quickly, no hassle.', 'Your search &amp; data stay on your device.', 'Prices as stores finish', 'Results appear as each store finishes.', 'Direct store links', 'Stores open on your tap', 'Stores open only when you press Compare.'].every(function (s) { return html.indexOf(s) >= 0; }) && (html.match(/<li><img class="pic"/g) || []).length === 7);
+var imgs = (html.match(/src="slides\/([a-z]+\.webp)"/g) || []).map(function (x) { return x.slice(11, -1); });
+ck('every slide picture file exists and is small (< 20 KB each)', imgs.length === 7 && imgs.every(function (f) { var p = path.join(__dirname, 'www', 'slides', f); return fs.existsSync(p) && fs.statSync(p).size > 1000 && fs.statSync(p).size < 20000; }));
+var lic = path.join(__dirname, 'www', 'slides', 'LICENSE-fluentui-emoji.txt');
+ck('MIT licence notice of the 3D pictures is shipped', fs.existsSync(lic) && /MIT License/.test(fs.readFileSync(lic, 'utf8')) && /Microsoft Corporation/.test(fs.readFileSync(lic, 'utf8')));
+ck('3D css: perspective, tilted neighbours, centred width, reduced motion', /\.perks\{--sw:min\(76vw,340px\)[^}]*perspective:900px/.test(css) && /\.perks\.js li\.prev\{transform:rotateY\(32deg\)/.test(css) && /\.perks\.js li\.next\{transform:rotateY\(-32deg\)/.test(css) && /\.perks li\{flex:0 0 var\(--sw\)/.test(css) && /prefers-reduced-motion:reduce\)\{\.perks li\.on \.pic\{animation:none\}/.test(css));
+ck('no remote picture url in the html, no remote url() or @import in the css (offline)', !/https?:\/\/[^"')\s]*\.(png|webp|jpg)/i.test(html) && !/@import|url\(https?:/.test(css));
+var r7 = rig({ n: 7 }), c7 = Car.make(r7.ul, r7.doc, r7.win);
+function cl(i, k) { return r7.ul.children[i]._cls[k] === 1; }
+ck('prev/next classes follow the current slide', c7.count === 7 && cl(0, 'on') && cl(1, 'next') && !cl(0, 'prev') && (r7.auto(), cl(1, 'on') && cl(0, 'prev') && cl(2, 'next') && !cl(1, 'next')));
+r7.auto(); r7.auto(); r7.auto(); r7.auto(); r7.auto();
+ck('last slide: only prev, no next, no stale class', c7.index() === 6 && cl(6, 'on') && cl(5, 'prev') && !cl(6, 'next') && !cl(0, 'next') && !cl(4, 'prev'));
+r7.auto(); ck('wraps to first with 7 slides', c7.index() === 0 && cl(0, 'on') && cl(1, 'next') && !cl(6, 'prev'));
 console.log('test_s22g: ' + pass + ' pass, ' + fail + ' fail');
 process.exit(fail ? 1 : 0);
