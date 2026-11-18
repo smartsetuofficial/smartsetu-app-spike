@@ -19,7 +19,7 @@ ck('1e buildNow passes sem to compareAny and returns res', /seenAt: seenAt, sem:
 ck('1f nothing loads at start: the engine is made only inside semEngine(), which only semRefine calls', (app.match(/semEngine\(\)/g) || []).length >= 3 && (app.match(/SEM\.make\(/g) || []).length === 1 && app.indexOf('SEM.make(') > iStart && app.indexOf('SEM.make(') < iEnd, 0);
 ck('1g cancelled search: render is skipped when gen changed (return before render)', /var sb = await semRefine\(out\.seenAt, gen\);\n\s+if \(gen !== runGen\) return;/.test(app), 0);
 ck('1h devtest report has the MEANING CHECK line, the panel shows it on open (textContent), app passes semDiag', /MEANING CHECK/.test(dev) && /semDiag: semDiag/.test(app) && /semline\.className = 'note semline'/.test(dev) && /sl\.textContent = 'Meaning check: '/.test(dev), 0);
-ck('1i version 0.10.21 in package.json and app.js', pkg.version === '0.10.21' && /VERSION = '0\.10\.21'/.test(app), pkg.version);
+ck('1i version 0.10.22 in package.json and app.js', pkg.version === '0.10.22' && /VERSION = '0\.10\.22'/.test(app), pkg.version);
 ck('1j no storage, no network call, no innerHTML in the new block', !/localStorage|sessionStorage|fetch\(|XMLHttpRequest|innerHTML/.test(app.slice(iStart, iEnd)), 0);
 ck('1k package.json dependencies unchanged (tokenizers 0.2.0, onnxruntime-web 1.30.0, exact)', pkg.dependencies['@huggingface/tokenizers'] === '0.2.0' && pkg.dependencies['onnxruntime-web'] === '1.30.0', pkg.dependencies);
 
