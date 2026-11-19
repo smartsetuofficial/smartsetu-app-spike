@@ -36,20 +36,22 @@ async function semRefine(seenAt, gen) { // -> { view, ... } when the meaning che
   if (st && (st.status === 'failed' || st.status === 'lowmem')) { semLast.skipped = st.status + ': ' + st.reason; return null; }
   try {
     // 1) a probe that knows no similarity: the engine output is the same as without the check, the probe only notes which titles the engine would ask about
-    buildNow(seenAt, { sim: function (t) { if (typeof t === 'string' && titles.length < SEM_TITLES && titles.indexOf(t) < 0) titles.push(t); } });
+    var p0 = buildNow(seenAt, { sim: function (t) { if (typeof t === 'string' && titles.length < SEM_TITLES && titles.indexOf(t) < 0) titles.push(t); } }), seeds = [];
+    try { var s0 = SmartSetu.similar(p0.res, {}); (s0.stores || []).forEach(function (s) { (s.items || []).forEach(function (i) { if (i && i.title && seeds.length < 40) seeds.push(i.title); }); }); } catch (_) { seeds = []; } // S22i: listings the words already confirmed = examples of what is meant
     semLast.asked = titles.length;
     if (titles.length < 3) { semLast.skipped = 'fewer than 3 titles to check'; return null; }
     var Qe = SmartSetu.query, qt = Qe.semText(Qe.parse(live.q));
     say('Checking more matches...');
     var sem = await new Promise(function (resolve) {
       var timer = setTimeout(function () { gaveUp = true; resolve(null); }, SEM_WAIT_MS);
-      semEngine().prepare(qt, titles, function () { return gen !== runGen || gaveUp; }).then(function (s) { clearTimeout(timer); resolve(s); }, function () { clearTimeout(timer); resolve(null); });
+      semEngine().prepare(qt, titles, function () { return gen !== runGen || gaveUp; }, seeds).then(function (s) { clearTimeout(timer); resolve(s); }, function () { clearTimeout(timer); resolve(null); });
     });
     semLast.ms = Date.now() - t0; semLast.gaveUp = gaveUp; semLast.engine = semEngine().state();
     if (!sem || gen !== runGen) return null;
     semLast.info = sem.info;
     var b = buildNow(seenAt, sem), si = b.res && b.res.semInfo;
-    semLast.pool = si ? si.pool : 0; semLast.rescued = si ? si.rescued : 0;
+    semLast.pool = si ? si.pool : 0; semLast.rescued = si ? si.rescued : 0; semLast.seeds = sem.info.seeds || 0; semLast.seedsKept = sem.info.seedsKept || 0;
+    try { var s1 = SmartSetu.similar(b.res, {}), smp = []; (s1.stores || []).forEach(function (s) { (s.closeItems || s.close || []).forEach(function (i) { if (smp.length < 8 && i && i.title) smp.push([s.store, String(i.title).slice(0, 34), Math.round(100 * (sem.sim(i.title) || 0)) / 100, sem.agree ? Math.round(100 * (sem.agree(i.title) || 0)) / 100 : null]); }); }); semLast.sample = smp; } catch (_) { /* the sample is only for reading */ }
     return si && si.rescued > 0 ? b : null;
   } catch (e) { semLast.error = String((e && e.message) || e).slice(0, 120); return null; }
 }

@@ -6,7 +6,7 @@
  * (the app then ranks exactly as before), low-memory phones never load the model, a new search stops the old work. Start values below are NOT measured. */
 'use strict';
 
-var DEFAULTS = { maxLen: 128, cacheMax: 600, floor: 0.30, rel: 0.85, max: 8, minMemGb: 4, loadMs: 60000, yieldEvery: 4, selfMargin: 0.05 };
+var DEFAULTS = { maxLen: 128, cacheMax: 600, floor: 0.30, rel: 0.85, max: 8, minMemGb: 4, loadMs: 60000, yieldEvery: 4, selfMargin: 0.05, agreeMin: 0.55, seedMax: 12 };
 var SELF = { a: 'dog food', b: 'puppy food', c: 'steel water bottle' }; // load check: a must be closer to b than to c
 
 function meanPool(data, seq, dim, mask) { // mean of the token vectors where mask = 1, then length 1
@@ -77,8 +77,22 @@ function make(deps, opt) {
     return loadP;
   }
 
-  // prepare(queryText, titles, isStale) -> Promise<sem | null>. sem = { sim(title), floor, rel, max, info }. null = rank without the meaning check.
-  function prepare(queryText, titles, isStale) {
+  // prepare(queryText, titles, isStale, seeds) -> Promise<sem | null>. sem = { sim(title), agree(title) | undefined, agreeMin, floor, rel, max, info }. null = rank without the meaning check.
+  // S22i (D-130): the listings the WORDS already confirmed in this same search are examples of what the person means. Their average vector is the prototype, listings that look like it are
+  // the same kind of product in any language and any wording. Members below the average likeness are dropped once (a toy or an accessory among phones). No seeds = no prototype.
+  function protoOf(seeds, info) {
+    var list = []; (Array.isArray(seeds) ? seeds : []).forEach(function (t) { if (typeof t === 'string' && t && list.indexOf(t) < 0 && list.length < opt.seedMax) list.push(t); });
+    if (!list.length) return Promise.resolve(null);
+    return Promise.all(list.map(function (t) { return embed(t); })).then(function (vs) {
+      vs = vs.filter(Boolean); info.seeds = vs.length; if (!vs.length) return null;
+      function mean(arr) { var d = arr[0].length, m = new Float32Array(d), k, n = 0; arr.forEach(function (v) { for (k = 0; k < d; k++) m[k] += v[k]; }); for (k = 0; k < d; k++) n += m[k] * m[k]; n = Math.sqrt(n) || 1; for (k = 0; k < d; k++) m[k] /= n; return m; }
+      var p = mean(vs);
+      if (vs.length >= 3) { var ds = vs.map(function (v) { return dot(p, v); }), avg = ds.reduce(function (a, b) { return a + b; }, 0) / ds.length, keep = vs.filter(function (v, i) { return ds[i] >= avg; }); if (keep.length >= 2) { p = mean(keep); info.seedsKept = keep.length; } }
+      return p;
+    });
+  }
+
+  function prepare(queryText, titles, isStale, seeds) {
     var info = { status: status, reason: reason, query: String(queryText || ''), titles: 0, embedded: 0, partial: false, loadMs: 0, embedMs: 0 };
     if (!queryText || !Array.isArray(titles) || !titles.length) return Promise.resolve(null);
     return ensure().then(function (st) {
@@ -89,6 +103,7 @@ function make(deps, opt) {
       info.titles = list.length;
       return embed(queryText).then(function (qv) {
         if (!qv) { info.reason = 'query vector missing'; return null; }
+        return protoOf(seeds, info).then(function (proto) {
         var i = 0;
         function step() {
           if (i >= list.length) return Promise.resolve();
@@ -103,9 +118,11 @@ function make(deps, opt) {
           info.embedMs = now() - t0;
           if (isStale && isStale()) return null; // a newer search started: this answer is not wanted
           return {
-            sim: function (title) { var v = cache.get(String(title)); return v ? dot(qv, v) : undefined; },
-            floor: opt.floor, rel: opt.rel, max: opt.max, info: info
+            sim: function (title) { var v = cache.get(String(title)); if (!v) return undefined; var a = dot(qv, v); return proto ? Math.max(a, dot(proto, v)) : a; },
+            agree: proto ? function (title) { var v = cache.get(String(title)); return v ? dot(proto, v) : undefined; } : undefined,
+            agreeMin: opt.agreeMin, floor: opt.floor, rel: opt.rel, max: opt.max, info: info
           };
+        });
         });
       });
     }).catch(function (e) { info.status = 'failed'; info.reason = msg(e); return null; });
