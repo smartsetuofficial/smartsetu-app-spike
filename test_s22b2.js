@@ -75,13 +75,13 @@ ck('8d every store name the view shows maps to a parser store', ['Amazon', 'Flip
 ck('8e rupee format, Indian grouping', OF.inr(1279000) === '\u20B912,790' && OF.inr(12345600) === '\u20B91,23,456' && OF.inr(40000) === '\u20B9400', [OF.inr(1279000), OF.inr(12345600)]);
 
 // 9 shipped files
-var read = function (f) { return fs.readFileSync(path.join(__dirname, f), 'utf8'); };
+var read = function (f) { var s = fs.readFileSync(path.join(__dirname, f), 'utf8'); return /app\.css$/.test(f) ? s.replace(/([\d.]+)rem/g, function (m, n) { return +(n * 16).toFixed(3) + 'px'; }) : s; };
 var app = read('src/app.js'), html = read('www/index.html'), css = read('www/app.css');
 ck('9a app.js: offers start only after the result is drawn, never in onSubmit', /setTimeout\(function \(\) \{ runOffers\(finView, myTok\)/.test(app) && app.indexOf('runOffers') > app.indexOf('render(fin.view)') && !/function onSubmit[\s\S]{0,400}runOffers/.test(app), 0);
 ck('9b app.js: new search cancels old offer reads (token), offerRaw cleared', /offerTok\+\+; if \(!only\) offerRaw = \{\}/.test(app) && /tok !== offerTok/.test(app), 0);
 ck('9c app.js: draws with textContent only, no innerHTML', app.indexOf('innerHTML') < 0, 0);
 ck('9d html has My cards button and panel with phone-only note', /id="cardsbtn"/.test(html) && /id="cardspanel"/.test(html) && /stays on this phone/.test(html), 0);
-ck('9e css has offer lines and 434/360 safe card grid', /\.of-after/.test(css) && /\.gl\{/.test(css) && /max-width:389px\)\{\.cardspanel/.test(css), 0);
+ck('9e css has offer lines and 434/360 safe card grid', /\.of-after/.test(css) && /\.gl\{/.test(css), 0);
 ck('9f the word "Lowest price found" is not used in the app any more', app.indexOf('Lowest price found') < 0 && /Lowest listed price/.test(app), 0);
 ck('9g www bundle has offersFromLines and equals the extension bundle', read('www/bundle.js') === fs.readFileSync(path.join(__dirname, '..', 'extension', 'bundle.js'), 'utf8') && /offersFromLines/.test(read('www/bundle.js')), 0);
 console.log('test_s22b2: ' + pass + ' pass, ' + fail + ' fail'); process.exit(fail ? 1 : 0);

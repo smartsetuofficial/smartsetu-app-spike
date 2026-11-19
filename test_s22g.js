@@ -75,7 +75,7 @@ var nm = rig(); nm.win.matchMedia = function () { throw new Error('old webview')
 c.stop(); r.auto(); ck('stop() clears the timer', r.ivs[0].on === false);
 
 // source checks: search cancel (app.js), fit and slider (app.css), hook
-var app = fs.readFileSync(path.join(__dirname, 'src/app.js'), 'utf8'), css = fs.readFileSync(path.join(__dirname, 'www/app.css'), 'utf8'), html = fs.readFileSync(path.join(__dirname, 'www/index.html'), 'utf8');
+var app = fs.readFileSync(path.join(__dirname, 'src/app.js'), 'utf8'), css = fs.readFileSync(path.join(__dirname, 'www/app.css'), 'utf8').replace(/([\d.]+)rem/g, function (m, n) { return +(n * 16).toFixed(3) + 'px'; }), html = fs.readFileSync(path.join(__dirname, 'www/index.html'), 'utf8');
 ck('Compare button stays active while a search runs', /function setBusy\(b\) \{ busy = b; \$\('go'\)\.disabled = false;/.test(app) && !/\$\('go'\)\.disabled = b/.test(app));
 ck('onSubmit no longer drops a second search', !/function onSubmit\(ev\) \{\s*ev\.preventDefault\(\);\s*if \(busy\) return;/.test(app));
 ck('new search cancels the old (cancelRun, runGen)', /function cancelRun\(\)/.test(app) && /if \(busy\) \{ if \(only \|\| q === live\.q\)/.test(app) && /var gen = \+\+runGen;/.test(app));

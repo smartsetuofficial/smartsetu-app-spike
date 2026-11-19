@@ -7,7 +7,7 @@ require('./www/bundle.js');
 var pass = 0, fail = 0;
 function ok(c, m) { if (c) pass++; else { fail++; console.log('FAIL: ' + m); } }
 function sha12(f) { return crypto.createHash('sha256').update(fs.readFileSync(f)).digest('hex').slice(0, 12); }
-function read(f) { return fs.readFileSync(path.join(__dirname, f), 'utf8'); }
+function read(f) { var s = fs.readFileSync(path.join(__dirname, f), 'utf8'); return /app\.css$/.test(f) ? s.replace(/([\d.]+)rem/g, function (m, n) { return +(n * 16).toFixed(3) + 'px'; }) : s; }
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 
 var fxDir = path.join(__dirname, '..', '..', 'tests', 'fixtures'), fxSnap = null;
