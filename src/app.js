@@ -4,7 +4,6 @@
  * Only stores that can sell the product are opened (storemap.js); the screen offers the others. Results are drawn as soon as the first store is read. */
 import { InAppBrowser, InvisibilityMode } from '@capgo/capacitor-inappbrowser';
 import { CapacitorHttp } from '@capacitor/core';
-import { Tokenizer } from '@huggingface/tokenizers'; // S22f-2 part 3 (D-128): tokenizer of the meaning model, runs on the phone
 var W = require('./webtabs.js');
 var C = require('./spike_core.js');
 var U = require('./uihelp.js');
@@ -12,50 +11,21 @@ var M = require('./storemap.js');
 var NF = require('./nativefetch.js');
 var Dev = require('./devtest.js');
 var Car = require('./carousel.js'); // S22g: Why SmartSetu cards slide one by one
-var SEM = require('./semantic.js'), OG = require('./ortglue.js'); // S22f-2 part 3 (D-128): meaning check + glue to onnxruntime-web
+var AIF = require('./aiflow.js'); // S23-2c (D-132): glue to the AI Worker (query meaning + accessory labels), tested in Node with a fake worker
 var OF = require('./offerflow.js').make({ parser: SmartSetu.parser, adapter: SmartSetu.adapter, offers: SmartSetu.offers, isTileLine: W.isTileLine }); // S22b-2: offers under result rows (D-117)
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.22';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.23';
 var cards = [], offerRaw = {}, offerTok = 0, lastView = null; // member's own cards (phone only), offer lines read from product pages (by listing url), run token, last drawn view
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = {};
-// ---- S22f-2 part 3 (D-128): MEANING check, AFTER the result is on screen (nothing runs before the tap, the first result never waits for it) ----
-// Start values, NOT measured on a phone (V-492): at most SEM_TITLES titles are embedded and this search waits at most SEM_WAIT_MS for the model. If the model is slow, loading goes on in the background and the NEXT search uses it.
-// Any failure = null = the result stays exactly as it was drawn. The model files come from the app folder (ort/, models/), nothing from the network.
-var semEng = null, semLast = null, SEM_TITLES = 120, SEM_WAIT_MS = 30000;
-function semEngine() {
-  if (!semEng) semEng = SEM.make(OG.makeDeps(OG.webConfig(window, Tokenizer)), { deviceMemory: navigator.deviceMemory });
-  return semEng;
+// ---- S23-2c (D-132): AI Worker = query meaning + accessory labels. AI_URL is the deployed Worker address (public, no secret; S23-4c-2); empty = the AI is off and the app runs exactly as before.
+// Any problem (no network, slow, bad answer, daily limit) = the old behaviour, never an error screen. Answers are kept in memory for this app run only. Start waits are NOT measured on a phone (V-531). ----
+var AI_URL = 'https://smartsetu-ai.smartsetuofficial.workers.dev', aiLast = null, aiLabels = null; // aiLabels = { isA } hook for the engine while a search that used the AI is on screen
+var AIX = AIF.make({ url: AI_URL, post: function (u, body, ms) { return Promise.resolve(CapacitorHttp.post({ url: u, headers: { 'Content-Type': 'application/json' }, data: body, connectTimeout: ms, readTimeout: ms })).then(function (r) { if (!r || r.status !== 200) throw new Error('http ' + (r && r.status)); var d = r.data; return typeof d === 'string' ? JSON.parse(d) : d; }); } });
+function aiDiag() { // one plain line for the owner-only store test report (devtest.js)
+  try { return aiLast ? JSON.stringify({ last: aiLast, state: AIX.state() }) : (AIX.on() ? 'no AI check ran yet (do a normal Compare first)' : 'AI is off (this build has no Worker address)'); } catch (e) { return 'unreadable'; }
 }
-function semDiag() { // one plain line for the owner-only store test report (devtest.js)
-  try { return semLast ? JSON.stringify({ last: semLast, engine: semEng ? semEng.state() : null }) : 'no meaning check ran yet (do a normal Compare first)'; } catch (e) { return 'unreadable'; }
-}
-async function semRefine(seenAt, gen) { // -> { view, ... } when the meaning check added close matches, else null
-  var t0 = Date.now(), titles = [], gaveUp = false, st = semEng ? semEng.state() : null;
-  semLast = { q: live.q, at: new Date(t0).toISOString() };
-  if (st && (st.status === 'failed' || st.status === 'lowmem')) { semLast.skipped = st.status + ': ' + st.reason; return null; }
-  try {
-    // 1) a probe that knows no similarity: the engine output is the same as without the check, the probe only notes which titles the engine would ask about
-    var p0 = buildNow(seenAt, { sim: function (t) { if (typeof t === 'string' && titles.length < SEM_TITLES && titles.indexOf(t) < 0) titles.push(t); } }), seeds = [];
-    try { var s0 = SmartSetu.similar(p0.res, {}); (s0.stores || []).forEach(function (s) { (s.items || []).forEach(function (i) { if (i && i.title && seeds.length < 40) seeds.push(i.title); }); }); } catch (_) { seeds = []; } // S22i: listings the words already confirmed = examples of what is meant
-    semLast.asked = titles.length;
-    if (titles.length < 3) { semLast.skipped = 'fewer than 3 titles to check'; return null; }
-    var Qe = SmartSetu.query, qt = Qe.semText(Qe.parse(live.q));
-    say('Checking more matches...');
-    var sem = await new Promise(function (resolve) {
-      var timer = setTimeout(function () { gaveUp = true; resolve(null); }, SEM_WAIT_MS);
-      semEngine().prepare(qt, titles, function () { return gen !== runGen || gaveUp; }, seeds).then(function (s) { clearTimeout(timer); resolve(s); }, function () { clearTimeout(timer); resolve(null); });
-    });
-    semLast.ms = Date.now() - t0; semLast.gaveUp = gaveUp; semLast.engine = semEngine().state();
-    if (!sem || gen !== runGen) return null;
-    semLast.info = sem.info;
-    var b = buildNow(seenAt, sem), si = b.res && b.res.semInfo;
-    semLast.pool = si ? si.pool : 0; semLast.rescued = si ? si.rescued : 0; semLast.seeds = sem.info.seeds || 0; semLast.seedsKept = sem.info.seedsKept || 0;
-    try { var s1 = SmartSetu.similar(b.res, {}), smp = []; (s1.stores || []).forEach(function (s) { (s.closeItems || s.close || []).forEach(function (i) { if (smp.length < 8 && i && i.title) smp.push([s.store, String(i.title).slice(0, 34), Math.round(100 * (sem.sim(i.title) || 0)) / 100, sem.agree ? Math.round(100 * (sem.agree(i.title) || 0)) / 100 : null]); }); }); semLast.sample = smp; } catch (_) { /* the sample is only for reading */ }
-    return si && si.rescued > 0 ? b : null;
-  } catch (e) { semLast.error = String((e && e.message) || e).slice(0, 120); return null; }
-}
-// ---- end S22f-2 part 3 ----
+// ---- end S23-2c ----
 function $(id) { return document.getElementById(id); }
 function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
 
@@ -212,7 +182,7 @@ function paintRelevance(res, runs) {
 }
 function buildNow(seenAt, sem) { // sem is optional (S22f-2 part 3); left out = the engine ranks exactly as before
   var runs = allRuns(), snaps = runs.filter(function (r) { return r.snapshot; }).map(function (r) { return r.snapshot; });
-  var res = SmartSetu.compareAny({ query: live.q, searches: snaps, products: [], seenAt: seenAt, sem: sem }), v = V.buildView(res, runs, seenAt);
+  var res = SmartSetu.compareAny({ query: live.q, ai: aiLabels || undefined, searches: snaps, products: [], seenAt: seenAt, sem: sem }), v = V.buildView(res, runs, seenAt);
   paintRelevance(res, runs);
   return { view: v, snaps: snaps.length, res: res };
 }
@@ -253,8 +223,10 @@ function cancelRun() {
   if (offerWt) { try { offerWt.dispose(); } catch (_) { /* closed already */ } offerWt = null; }
 }
 async function startRun(q, only) {
+  if (busy && !only && q === live.userQ) q = live.q; // S23-2c: the same words again while the AI-cleaned search runs = the same search
   if (busy) { if (only || q === live.q) { if (!only) say('Already comparing this search...'); return; } cancelRun(); } else if (offerWt) cancelRun();
   var gen = ++runGen;
+  if (!only) aiLabels = null; // labels of the search before must never touch this one
   offerTok++; if (!only) offerRaw = {};
   say(''); setBusy(true);
   var tabs = null, tabs2 = null, out = null, pl = plan(q, only), extra = !!only;
@@ -265,6 +237,19 @@ async function startRun(q, only) {
     if (!extra) { live.runs = {}; skeleton(); $('morebox').hidden = true; initProgress(pl); }
     else { only.forEach(function (l) { if (pl.enabled[l]) setRow(l, 'wait', 'Waiting...', true); }); $('progress').classList.add('running'); maxDone = 0; refreshBar(); }
     retry = false;
+    var userQ = q; // S23-2c: the member's own words; the AI may turn them into a clean search phrase + price cap, then THAT is what every store gets
+    if (!extra) {
+      live.userQ = userQ; live.aiSearch = ''; aiLast = { q: userQ, at: new Date().toISOString() };
+      if (AIX.on()) {
+        say('Understanding your search...');
+        var aiR = await AIX.rewrite(userQ);
+        if (gen !== runGen) return;
+        say('');
+        aiLast.rewrite = aiR.ok ? { search: aiR.search, max_price: aiR.max_price, cached: !!aiR.cached, ms: aiR.ms || 0 } : { reason: aiR.reason };
+        var aq = aiR.ok ? SmartSetu.query.aiQuery(aiR.search, aiR.max_price) : '';
+        if (aq) { q = aq; live.q = aq; live.aiSearch = aiR.search; }
+      }
+    }
     function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { if (gen !== runGen) return; updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, perStoreMs: 50000, retryTimeouts: false }; }
     var pass1 = Object.assign({}, pl.enabled); pass1.Myntra = false; pass1.Croma = false; // S20b: Myntra is read on its own after the others (card rescue, below), it does not hold up the rest
     var o1 = opts(pass1); o1.fetchFirst = SmartSetuFetchRead.STORES_OK; o1.fetchRead = fr; o1.fetchMs = 9000;
@@ -325,10 +310,14 @@ async function startRun(q, only) {
     var left = live.skipped.filter(function (l) { return !live.runs[l]; });
     if (left.length) { $('morebtn').textContent = 'Also check ' + left.length + ' other store' + (left.length > 1 ? 's' : '') + ' (' + left.join(', ') + ')'; $('morebox').hidden = false; live.skipped = left; } else $('morebox').hidden = true;
     say('');
-    var finView = fin.view; // S22f-2 part 3: meaning check after the result is shown; if it adds close matches the screen is drawn once more
-    var sb = await semRefine(out.seenAt, gen);
-    if (gen !== runGen) return;
-    if (sb) { finView = sb.view; render(finView); }
+    var finView = fin.view;
+    if (live.aiSearch && AIX.on()) { // S23-2c: the AI labels the cards on screen; accessories, parts and toys are taken out and the screen is drawn once more only if something was dropped
+      say('Checking the results...');
+      var rf = await AIX.refine(live.aiSearch, fin, function () { return buildNow(out.seenAt); }, function () { return gen !== runGen; }, function (f) { aiLabels = { isA: f }; });
+      if (gen !== runGen) return;
+      aiLast.refine = rf.info; say('');
+      if (rf.next) { fin = rf.next; finView = fin.view; render(finView); }
+    }
     say('');
     var myTok = offerTok; setTimeout(function () { runOffers(finView, myTok); }, 0); // after the result is on screen, never before the owner taps Compare (D-010)
   } catch (e) {
@@ -411,5 +400,5 @@ document.addEventListener('DOMContentLoaded', function () {
     ev.preventDefault();
     InAppBrowser.open({ url: u });
   });
-  Dev.attach({ trigger: $('logo'), isBusy: function () { return busy; }, setBusy: setBusy, query: function () { return $('q').value.trim(); }, version: VERSION, R: R, V: V, W: W, C: C, M: M, NF: NF, http: CapacitorHttp, pluginApi: pluginApi, collect: smartsetuCollect, SmartSetu: SmartSetu, SnapDoc: SmartSetuSnapDoc, fetchRead: SmartSetuFetchRead, semDiag: semDiag });
+  Dev.attach({ trigger: $('logo'), isBusy: function () { return busy; }, setBusy: setBusy, query: function () { return $('q').value.trim(); }, version: VERSION, R: R, V: V, W: W, C: C, M: M, NF: NF, http: CapacitorHttp, pluginApi: pluginApi, collect: smartsetuCollect, SmartSetu: SmartSetu, SnapDoc: SmartSetuSnapDoc, fetchRead: SmartSetuFetchRead, aiDiag: aiDiag });
 });

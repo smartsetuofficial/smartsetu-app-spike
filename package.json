@@ -1,6 +1,6 @@
 {
   "name": "smartsetu-app",
-  "version": "0.10.22",
+  "version": "0.10.23",
   "private": true,
   "description": "SmartSetu Android app (release candidate, S14-3): the extension Compare screen on hidden webviews, 8 stores. Not released yet.",
   "scripts": {
@@ -10,9 +10,7 @@
   "dependencies": {
     "@capacitor/android": "8.5.3",
     "@capacitor/core": "8.5.3",
-    "@capgo/capacitor-inappbrowser": "8.26.1",
-    "@huggingface/tokenizers": "0.2.0",
-    "onnxruntime-web": "1.30.0"
+    "@capgo/capacitor-inappbrowser": "8.26.1"
   },
   "devDependencies": {
     "@capacitor/cli": "8.5.3",

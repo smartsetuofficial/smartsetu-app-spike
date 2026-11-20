@@ -27,7 +27,7 @@ async function runFull(env, log) {
   try { /* S21e (V-386): the real screen insets and page height, so a bar overlap can be judged from numbers */ var de = document.documentElement, cs0 = getComputedStyle(de), pr = document.createElement('div'); pr.style.cssText = 'position:absolute;visibility:hidden;padding-bottom:env(safe-area-inset-bottom,0px);padding-top:env(safe-area-inset-top,0px)'; document.body.appendChild(pr); var pcs = getComputedStyle(pr); notes.push('INSETS: css var top ' + (cs0.getPropertyValue('--safe-area-inset-top') || '-') + ' bottom ' + (cs0.getPropertyValue('--safe-area-inset-bottom') || '-') + ' | env top ' + pcs.paddingTop + ' bottom ' + pcs.paddingBottom + ' | innerHeight ' + window.innerHeight + ' | screen ' + screen.height + ' x ' + screen.width + ' | avail ' + screen.availHeight + ' | outer ' + window.outerHeight + ' | clientH ' + de.clientHeight + ' | visualViewport ' + (window.visualViewport ? Math.round(window.visualViewport.height) + ' x ' + Math.round(window.visualViewport.width) : '-') + ' | dpr ' + window.devicePixelRatio + ' | page height ' + de.scrollHeight + ' | scrollY ' + Math.round(window.scrollY)); document.body.removeChild(pr); } catch (e) { notes.push('INSETS line failed: ' + String(e && e.message).slice(0, 60)); }
   notes.push('Category pick: ' + (pickInfo.cats.join(', ') || 'none (every store is checked)') + ' | would open: ' + pickInfo.keys.join(', ') + ' | would skip: ' + (Object.keys(pickInfo.skip).join(', ') || 'none') + ' (this test opens ALL stores)');
   try { var pq = env.SmartSetu.query.parse(q); notes.push('ENGINE: query v' + env.SmartSetu.query.version + ' | parser v' + env.SmartSetu.parser.version + ' | app ' + (env.version || '?') + ' | parsed ' + JSON.stringify({ kidsQ: pq.kidsQ, sub: pq.sub, gender: pq.gender, age: pq.age, cat: pq.cat && pq.cat.term, winter: pq.winter, extras: pq.extras, models: pq.models, maxPrice: pq.maxPrice })); } catch (e) { notes.push('ENGINE line failed: ' + String(e && e.message).slice(0, 80)); }
-  try { notes.push('MEANING CHECK (last normal Compare in this app run): ' + (env.semDiag ? env.semDiag() : 'not wired')); } catch (_) { /* report only */ }
+  try { notes.push('AI CHECK (last normal Compare in this app run): ' + (env.aiDiag ? env.aiDiag() : 'not wired')); } catch (_) { /* report only */ }
   try {
     log('Step 1 of 3: fast read of every store...');
     var nf = env.NF.makeFetch(env.http, ua), fr = env.fetchRead, frm = fr.make(nf, env.SnapDoc.snapFromHtml);
@@ -117,7 +117,7 @@ function attach(env) {
   }
   env.trigger.addEventListener('click', function () {
     var now = Date.now(); taps = taps.filter(function (t) { return now - t < 6000; }); taps.push(now);
-    if (taps.length >= 7) { taps = []; if (!panel) { build(); panel.hidden = true; } panel.hidden = !panel.hidden; if (!panel.hidden) { try { var sl = panel.querySelector('.semline'); if (sl) sl.textContent = 'Meaning check: ' + (env.semDiag ? env.semDiag() : 'not wired'); } catch (_) { /* owner panel only */ } try { panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) {} } }
+    if (taps.length >= 7) { taps = []; if (!panel) { build(); panel.hidden = true; } panel.hidden = !panel.hidden; if (!panel.hidden) { try { var sl = panel.querySelector('.semline'); if (sl) sl.textContent = 'AI check: ' + (env.aiDiag ? env.aiDiag() : 'not wired'); } catch (_) { /* owner panel only */ } try { panel.scrollIntoView({ behavior: 'smooth', block: 'start' }); } catch (_) {} } }
   });
 }
 

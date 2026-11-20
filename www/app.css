@@ -378,3 +378,10 @@ html{-webkit-text-size-adjust:100%;text-size-adjust:100%}
 .perks .pd{max-width:24ch;font-size:0.9375rem;line-height:1.35;font-weight:600;color:#34507F}
 
 @media (prefers-reduced-motion:reduce){.perks li.on .pic{animation:none}.perks.js li{transition:none}}
+
+/* ===== S23-F-2a (D-133): home screen fits at every system font size. Layout only; same look when the text already fits ===== */
+html.fitwrap .hero h1 span{white-space:normal}
+html.fitwrap .hero h1 .l3{flex-wrap:wrap}
+.hero .eyebrow{max-width:66%;white-space:normal}
+.cardsrow .cr-s{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
+.search input[type=search]{text-overflow:ellipsis}
