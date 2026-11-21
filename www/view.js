@@ -4,7 +4,7 @@
 (function (root) {
   'use strict';
   var NAMES = { amazon: 'Amazon', flipkart: 'Flipkart', myntra: 'Myntra', ajio: 'Ajio', nykaa: 'Nykaa', meesho: 'Meesho', tatacliq: 'Tata CLiQ', croma: 'Croma', reliancedigital: 'Reliance Digital' };
-  var STATE_TEXT = { ok: 'Results read', no_cards: 'No listings found on the page', no_data: 'Page gave no readable data', error: 'Could not open the page', timeout: 'Took too long', off: 'Switched off', retrying: 'Trying once more...' };
+  var STATE_TEXT = { ok: 'Results read', no_cards: 'No listings found on the page', no_data: 'Page gave no readable data', error: 'Could not open the page', timeout: 'Took too long', off: 'Switched off', retrying: 'Trying once more...', skipped: 'Skipped to keep it fast' };
   // Where a timed-out store got stuck (runner_core stage names). Unknown or missing stage = plain wording, nothing guessed.
   var STAGE_TEXT = { opening: 'opening the tab', loading: 'loading the page', settling: 'waiting after the page loaded', reading: 'reading the page' };
   // S12-13 (D-073): how a store was read. via 'fetch' = plain request, no tab. fetchFallback = the plain request failed and a tab was used (reason from runner_core). Same for every store; stores never tried by fetch show nothing here (tab only).

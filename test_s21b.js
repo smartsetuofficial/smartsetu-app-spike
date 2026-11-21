@@ -10,7 +10,7 @@ function load(f) { var j = JSON.parse(fs.readFileSync(path.join(dir, f), 'utf8')
 var snaps = load('snap_iphone17pro_2026-11-05.json');
 function rel(q) { return U.relevantByStore(SS.compareAny({ query: q, searches: snaps, products: [], seenAt: '2026-11-15T00:00:00Z' })); }
 var a = rel('iphone 17 pro');
-ck('1 specific search: compared listings counted per store (flipkart 9, reliance 6, amazon 8)', a.flipkart === 9 && a.reliancedigital === 6 && a.amazon === 8, a);
+ck('1 specific search: compared listings counted per store (flipkart 9, reliance 6, amazon 0; S23-6c: the 8 Amazon titles are other iPhone models, the screen never drew them, so they are not counted)', a.flipkart === 9 && a.reliancedigital === 6 && a.amazon === 0, a);
 ck('2 stores that were read but have nothing that matches are 0, not missing (myntra, ajio, nykaa, meesho, tatacliq)', a.myntra === 0 && a.ajio === 0 && a.nykaa === 0 && a.meesho === 0 && a.tatacliq === 0, a);
 ck('3 a store whose page gave no data (croma) is not in the map', !Object.prototype.hasOwnProperty.call(a, 'croma'), a);
 var b = rel('smartphone');

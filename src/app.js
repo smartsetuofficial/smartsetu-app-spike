@@ -14,7 +14,7 @@ var Car = require('./carousel.js'); // S22g: Why SmartSetu cards slide one by on
 var AIF = require('./aiflow.js'); // S23-2c (D-132): glue to the AI Worker (query meaning + accessory labels), tested in Node with a fake worker
 var OF = require('./offerflow.js').make({ parser: SmartSetu.parser, adapter: SmartSetu.adapter, offers: SmartSetu.offers, isTileLine: W.isTileLine }); // S22b-2: offers under result rows (D-117)
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.23';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.24';
 var cards = [], offerRaw = {}, offerTok = 0, lastView = null; // member's own cards (phone only), offer lines read from product pages (by listing url), run token, last drawn view
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = {};
@@ -22,8 +22,11 @@ var PAUSED = {};
 // Any problem (no network, slow, bad answer, daily limit) = the old behaviour, never an error screen. Answers are kept in memory for this app run only. Start waits are NOT measured on a phone (V-531). ----
 var AI_URL = 'https://smartsetu-ai.smartsetuofficial.workers.dev', aiLast = null, aiLabels = null; // aiLabels = { isA } hook for the engine while a search that used the AI is on screen
 var AIX = AIF.make({ url: AI_URL, post: function (u, body, ms) { return Promise.resolve(CapacitorHttp.post({ url: u, headers: { 'Content-Type': 'application/json' }, data: body, connectTimeout: ms, readTimeout: ms })).then(function (r) { if (!r || r.status !== 200) throw new Error('http ' + (r && r.status)); var d = r.data; return typeof d === 'string' ? JSON.parse(d) : d; }); } });
+var lastStores = null; // S23-6c: state, stage and seconds of every store of the last normal Compare (for the owner-only report)
+var STORE_MS = 20000, GATE_MS = 30000; // S23-6c time cap (first values, NOT measured on the phone): a store gets 20 s, no new store tab and no extra try after 30 s
+function storesDiag() { try { return lastStores ? ' | STORES ' + JSON.stringify(lastStores) : ' | STORES none yet'; } catch (e) { return ''; } }
 function aiDiag() { // one plain line for the owner-only store test report (devtest.js)
-  try { return aiLast ? JSON.stringify({ last: aiLast, state: AIX.state() }) : (AIX.on() ? 'no AI check ran yet (do a normal Compare first)' : 'AI is off (this build has no Worker address)'); } catch (e) { return 'unreadable'; }
+  try { return (aiLast ? JSON.stringify({ last: aiLast, state: AIX.state() }) : (AIX.on() ? 'no AI check ran yet (do a normal Compare first)' : 'AI is off (this build has no Worker address)')) + storesDiag(); } catch (e) { return 'unreadable'; }
 }
 // ---- end S23-2c ----
 function $(id) { return document.getElementById(id); }
@@ -171,11 +174,11 @@ function allRuns() { return Object.keys(live.runs).map(function (k) { return liv
 // S21b (D-110): after the engine has counted, a store line says how many listings MATCH the search (or "No matching products"), not how many cards the page had. Only stores that finished with state ok; a failure here never stops the run.
 function paintRelevance(res, runs) {
   try {
-    var rel = U.relevantByStore(res); if (!rel) return;
+    var rel = U.relevantByStore(res), cls = U.closeByStore(res); if (!rel) return;
     runs.forEach(function (run) {
       var it = plistItems[run.store];
       if (!it || run.state !== 'ok' || !Object.prototype.hasOwnProperty.call(rel, run.key)) return;
-      var s = U.relevanceLine(rel[run.key]);
+      var s = U.relevanceLine(rel[run.key], cls[run.key] || 0);
       it.st.textContent = s.text; it.st.className = 'st ' + s.kind; it.ic.className = 'ic ' + s.kind;
     });
   } catch (_) { /* the plain store line stays */ }
@@ -231,7 +234,7 @@ async function startRun(q, only) {
   say(''); setBusy(true);
   var tabs = null, tabs2 = null, out = null, pl = plan(q, only), extra = !!only;
   var fr = SmartSetuFetchRead.make(NF.makeFetch(CapacitorHttp, C.desktopUa(navigator.userAgent)), SmartSetuSnapDoc.snapFromHtml);
-  function late() { return Date.now() - live.t0 > 100000; }
+  function late() { return Date.now() - live.t0 > GATE_MS; }
   try {
     live.q = q; live.t0 = Date.now(); live.scrolled = extra; live.firstAt = 0;
     if (!extra) { live.runs = {}; skeleton(); $('morebox').hidden = true; initProgress(pl); }
@@ -247,24 +250,27 @@ async function startRun(q, only) {
         say('');
         aiLast.rewrite = aiR.ok ? { search: aiR.search, max_price: aiR.max_price, cached: !!aiR.cached, ms: aiR.ms || 0 } : { reason: aiR.reason };
         var aq = aiR.ok ? SmartSetu.query.aiQuery(aiR.search, aiR.max_price) : '';
-        if (aq) { q = aq; live.q = aq; live.aiSearch = aiR.search; }
+        if (aq) { q = aq; live.q = aq; live.aiSearch = aiR.search; aiLabels = { isA: AIX.isAFor(aiR.search), isP: AIX.isPFor(aiR.search) }; } // S23-5: the first draw already asks the engine which cards it could not confirm (aiInfo.unsure); labels of the same phrase from memory apply at once
       }
     }
-    function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { if (gen !== runGen) return; updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, perStoreMs: 50000, retryTimeouts: false }; }
+    function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { if (gen !== runGen) return; updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, perStoreMs: STORE_MS, deadlineAt: live.t0 + GATE_MS, retryTimeouts: false }; }
     var pass1 = Object.assign({}, pl.enabled); pass1.Myntra = false; pass1.Croma = false; // S20b: Myntra is read on its own after the others (card rescue, below), it does not hold up the rest
     var o1 = opts(pass1); o1.fetchFirst = SmartSetuFetchRead.STORES_OK; o1.fetchRead = fr; o1.fetchMs = 9000;
     tabs = mkTabs();
     out = await runStores(tabs, o1);
     if (gen !== runGen) return;
     adopt(out.runs);
-    if (pl.enabled.Myntra) {
+    function skipRun(label) { var st = storeOf(label); return { store: st.label, key: st.key, state: 'skipped', stage: 'waiting', ms: 0 }; }
+    if (pl.enabled.Myntra && late()) { var ms0 = skipRun('Myntra'); W.mergeRuns(out, { runs: [ms0] }); ms0.retried = false; updateProgress(ms0); adopt([ms0]); }
+    else if (pl.enabled.Myntra) {
       say('Checking Myntra...');
       tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
       var mr = await W.rescueRead(tabs2, storeOf('Myntra'), q, {});
       if (gen !== runGen) return;
       W.mergeRuns(out, { runs: [mr] }); updateProgress(mr); adopt([mr]); liveRender();
     }
-    if (pl.enabled.Croma) { // S21e: Croma needs a pincode before it shows products; the app types a fixed one (owner: the listing does not change), see W.pincodeSet
+    if (pl.enabled.Croma && late()) { var cs0 = skipRun('Croma'); W.mergeRuns(out, { runs: [cs0] }); cs0.retried = false; updateProgress(cs0); adopt([cs0]); }
+    else if (pl.enabled.Croma) { // S21e: Croma needs a pincode before it shows products; the app types a fixed one (owner: the listing does not change), see W.pincodeSet
       say('Checking Croma...');
       tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
       var cr = await W.pinRead(tabs2, storeOf('Croma'), q, W.CROMA_PIN, {});
@@ -272,7 +278,7 @@ async function startRun(q, only) {
       W.mergeRuns(out, { runs: [cr] }); updateProgress(cr); adopt([cr]); liveRender();
     }
     var notMyntra = function (l) { return l !== 'Myntra' && l !== 'Croma'; };
-    var bad = W.failingLabels(out.runs).filter(notMyntra);
+    var bad = late() ? [] : W.failingLabels(out.runs).filter(notMyntra); // S23-6c: no second try after the time gate
     if (bad.length) {
       say('Checking ' + bad.join(', ') + ' again...');
       retry = true;
@@ -304,6 +310,7 @@ async function startRun(q, only) {
       }
     }
     if (live.timer) { clearTimeout(live.timer); live.timer = 0; }
+    if (!extra) { try { lastStores = (out.runs || []).map(function (r) { return { s: r.store, st: r.state, g: r.stage || null, ms: r.ms || 0, at: r.doneAt || null, fb: r.fetchFallback || null, via: r.via || null, n: r.cards == null ? null : r.cards }; }); } catch (_) { lastStores = null; } }
     var fin = buildNow(out.seenAt);
     render(fin.view);
     if (!extra) live.skipped = pl.skipped;
@@ -313,7 +320,7 @@ async function startRun(q, only) {
     var finView = fin.view;
     if (live.aiSearch && AIX.on()) { // S23-2c: the AI labels the cards on screen; accessories, parts and toys are taken out and the screen is drawn once more only if something was dropped
       say('Checking the results...');
-      var rf = await AIX.refine(live.aiSearch, fin, function () { return buildNow(out.seenAt); }, function () { return gen !== runGen; }, function (f) { aiLabels = { isA: f }; });
+      var rf = await AIX.refine(live.aiSearch, fin, function () { return buildNow(out.seenAt); }, function () { return gen !== runGen; }, function (f, p) { aiLabels = { isA: f, isP: p }; });
       if (gen !== runGen) return;
       aiLast.refine = rf.info; say('');
       if (rf.next) { fin = rf.next; finView = fin.view; render(finView); }

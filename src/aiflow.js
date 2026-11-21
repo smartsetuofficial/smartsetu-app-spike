@@ -3,7 +3,7 @@
  * Start values NOT measured on a phone (V-531): rewrite wait 6000 ms, classify wait 8000 ms, 60 s pause after a network or Worker failure. Answers are kept in memory for this app run only
  * (no storage, nothing written to the phone). The Worker keeps and logs nothing (see code/worker). Only a card the AI called exactly "A" is ever dropped. */
 'use strict';
-var MAX_TITLES = 45, MAX_TITLE_CHARS = 200, MAX_SEARCH_CHARS = 120, MAX_PRICE = 10000000, MEM_CAP = 400;
+var ASK_CAP = 300, MAX_TITLES = 45, MAX_TITLE_CHARS = 200, MAX_SEARCH_CHARS = 120, MAX_PRICE = 10000000, MEM_CAP = 400;
 
 function norm(s) { return typeof s === 'string' ? s.replace(/\s+/g, ' ').trim().toLowerCase() : ''; }
 function oneLine(s, max) { return typeof s === 'string' ? s.replace(/[\u0000-\u001f\u007f\u2028\u2029]+/g, ' ').replace(/\s+/g, ' ').trim().slice(0, max).trim() : ''; }
@@ -69,30 +69,33 @@ function make(deps) {
   // the hook for the engine: true ONLY for a title the AI called A for this search phrase
   function isAFor(search) { var s = oneLine(search, MAX_SEARCH_CHARS + 1); return function (title) { return typeof title === 'string' && memC[ckey(s, title)] === 'A'; }; }
 
+  // S23-5 (D-137): true ONLY for a title the AI answered P (the searched product) for this search phrase; the engine may then confirm a card whose title never names the type (Flipkart 'Galaxy A06 (Black, 64 GB)'), still only as a close match
+  function isPFor(search) { var s = oneLine(search, MAX_SEARCH_CHARS + 1); return function (title) { return typeof title === 'string' && memC[ckey(s, title)] === 'P'; }; }
+
   // cur = { view, res } already drawn WITHOUT labels. rebuild() builds the same screen again with the labels this module now holds (the app sets its engine hook before calling it).
   // At most 2 rounds: round 1 labels the cards on screen; if accessories left, cards from further down take their place and round 2 labels those. gone() = the run was cancelled.
   // -> { next: the newer { view, res } or null when nothing was dropped, info }
   function refine(search, cur, rebuild, gone, setHook) {
-    var info = { rounds: 0, asked: 0, dropped: 0, ms: 0 }, last = cur;
+    var info = { rounds: 0, asked: 0, dropped: 0, rescued: 0, ms: 0 }, last = cur;
     return (async function () {
       for (var i = 0; i < 2; i++) {
-        var shown = shownTitles(last.view, MAX_TITLES);
+        var shown = askTitles(last.res, last.view, ASK_CAP); // S23-5: the cards the word checks could not confirm first, then the cards on screen
         if (!shown.length) break;
         var t0 = now(), cr = await classify(search, shown);
         if (gone && gone()) return { next: null, info: info, cancelled: true };
         info.rounds++; info.asked += cr.asked || 0; info.ms += now() - t0;
         if (!cr.ok) { info.reason = cr.reason || 'not_ok'; break; }
         if (cr.asked === 0 && i > 0) break;
-        if (typeof setHook === 'function') setHook(isAFor(search));
+        if (typeof setHook === 'function') setHook(isAFor(search), isPFor(search));
         var b = rebuild(); if (!b || !b.view) break;
-        last = b; info.dropped = (b.res && b.res.aiInfo && b.res.aiInfo.dropped) || 0;
+        last = b; info.dropped = (b.res && b.res.aiInfo && b.res.aiInfo.dropped) || 0; info.rescued = (b.res && b.res.aiInfo && b.res.aiInfo.rescued) || 0;
         if (cr.asked === 0) break;
       }
-      return { next: info.dropped > 0 ? last : null, info: info };
+      return { next: (info.dropped > 0 || info.rescued > 0) ? last : null, info: info };
     })();
   }
   function state() { return { on: on(), downForMs: Math.max(0, downUntil - now()), calls: stat.calls, failed: stat.failed, cached: stat.cached, paused: stat.paused, lastFail: stat.lastFail || null }; }
-  return { on: on, rewrite: rewrite, classify: classify, refine: refine, isAFor: isAFor, state: state };
+  return { on: on, rewrite: rewrite, classify: classify, refine: refine, isAFor: isAFor, isPFor: isPFor, state: state };
 }
 
 // titles of the cards the member can see in a drawn view (view.groups[].rows[] and view.top.rows[]), in screen order, each once, at most cap
@@ -103,4 +106,18 @@ function shownTitles(view, cap) {
   return out;
 }
 
-module.exports = { make: make, shownTitles: shownTitles, MAX_TITLES: MAX_TITLES, version: '1' };
+// S23-5 (D-137): the titles to ask the AI about, in this order: (1) the listings the engine could not confirm by words (res.aiInfo.unsure = { store: [titles] }), one store after the other in turns so every store is heard,
+// (2) the cards on screen. classify() skips titles it already knows and sends at most MAX_TITLES new ones, so a long list is fine (round 2 takes the next ones).
+function askTitles(res, view, cap) {
+  var out = [], seen = {}; cap = cap > 0 ? cap : ASK_CAP;
+  function add(t) { if (typeof t === 'string' && t && !seen[t] && out.length < cap) { seen[t] = 1; out.push(t); } }
+  try {
+    var u = res && res.aiInfo && res.aiInfo.unsure, lists = [];
+    if (u && typeof u === 'object') Object.keys(u).forEach(function (k) { if (Array.isArray(u[k])) lists.push(u[k]); });
+    for (var i = 0, more = true; more && out.length < cap; i++) { more = false; lists.forEach(function (l) { if (i < l.length) { more = true; add(l[i]); } }); }
+  } catch (_) { /* only the cards on screen then */ }
+  shownTitles(view, cap).forEach(add);
+  return out;
+}
+
+module.exports = { make: make, shownTitles: shownTitles, askTitles: askTitles, MAX_TITLES: MAX_TITLES, version: '1' };

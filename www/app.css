@@ -385,3 +385,9 @@ html.fitwrap .hero h1 .l3{flex-wrap:wrap}
 .hero .eyebrow{max-width:66%;white-space:normal}
 .cardsrow .cr-s{white-space:normal;overflow:visible;text-overflow:clip;overflow-wrap:anywhere}
 .search input[type=search]{text-overflow:ellipsis}
+/* S23-F-3 (D-138): big system font size. fitguard.js sets --fitk (measured ratio) and the class fitwrap only when the heading is wider than its box. The display texts get the same ratio so they look as at normal size; the header stays in one row; body text, search box and buttons keep the bigger size. */
+html.fitwrap .top .wrap{flex-wrap:nowrap}
+html.fitwrap .hero h1{font-size:calc(min(8.2vw,2rem)*var(--fitk,1))}
+html.fitwrap .brand{font-size:calc(1.375rem*var(--fitk,1))}
+html.fitwrap .motto{font-size:calc(0.5625rem*var(--fitk,1))}
+html.fitwrap .tag{font-size:calc(0.625rem*var(--fitk,1))}

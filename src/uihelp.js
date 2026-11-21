@@ -1,6 +1,6 @@
 /* smartsetu app UI helpers (S14-4). Pure functions, no DOM, tested in Node (test_app.js).
  * They only shorten and group what the engine already returned. Nothing is added, estimated or invented. */
-var FINAL = { ok: 1, no_cards: 1, no_data: 1, error: 1, timeout: 1, off: 1 };
+var FINAL = { ok: 1, no_cards: 1, no_data: 1, error: 1, timeout: 1, off: 1, skipped: 1 };
 // Short plain line for a store that was skipped because its page showed a notice; keys match webtabs.NOCARDS_NOTE (V-242, D-090).
 var SKIP_TEXT = { croma: 'Not available yet' };
 
@@ -20,6 +20,7 @@ function shortLine(run, full) {
   if (st === 'retrying') return { text: 'Trying once more...', kind: 'wait' };
   if (st === 'no_cards') return SKIP_TEXT[key] ? { text: SKIP_TEXT[key], kind: 'skip' } : { text: 'No listings found', kind: 'bad' };
   if (st === 'timeout') return { text: 'Took too long', kind: 'bad' };
+  if (st === 'skipped') return { text: 'Skipped to keep it fast', kind: 'skip' };
   if (st === 'no_data') return { text: 'No readable data', kind: 'bad' };
   if (st === 'error') return { text: 'Could not open this store', kind: 'bad' };
   return { text: text, kind: 'wait' };
@@ -70,10 +71,20 @@ function relevantByStore(res) {
   if (!res || !res.storeStatus) return null;
   var m = {};
   Object.keys(res.storeStatus).forEach(function (k) { if (res.storeStatus[k] === 'ok') m[k] = 0; });
-  ((res.similar && res.similar.stores) || []).forEach(function (s) { if (s && Object.prototype.hasOwnProperty.call(m, s.store)) m[s.store] += (typeof s.total === 'number' ? s.total : (s.items ? s.items.length : 0)); });
-  (res.clusters || []).forEach(function (cl) { ((cl && cl.members) || []).forEach(function (x) { if (x && Object.prototype.hasOwnProperty.call(m, x.store)) m[x.store] += 1; }); });
+  var has = function (k) { return Object.prototype.hasOwnProperty.call(m, k); };
+  if (res.similar && res.similar.mode === 'similar_products') { // S23-6c: the screen draws the similar-products block (cluster members are inside it), so only it is counted
+    ((res.similar.stores) || []).forEach(function (s) { if (s && has(s.store)) m[s.store] += (typeof s.total === 'number' ? s.total : (s.items ? s.items.length : 0)); });
+    return m;
+  }
+  (res.clusters || []).forEach(function (cl) { if (cl && cl.queryMatch === false) return; ((cl && cl.members) || []).forEach(function (x) { if (x && has(x.store)) m[x.store] += 1; }); }); // specific search: the screen draws only clusters that match the query
   return m;
 }
-function relevanceLine(n) { return n > 0 ? { text: n + (n === 1 ? ' matching listing' : ' matching listings'), kind: 'ok' } : { text: 'No matching products', kind: 'skip' }; }
+// S23-6c: close matches drawn per store (a store that has only close rows). Same source as the screen.
+function closeByStore(res) {
+  var m = {};
+  if (res && res.similar && res.similar.mode === 'similar_products') ((res.similar.stores) || []).forEach(function (s) { if (s) m[s.store] = (s.close && s.close.length) || 0; });
+  return m;
+}
+function relevanceLine(n, close) { return n > 0 ? { text: n + (n === 1 ? ' matching listing' : ' matching listings'), kind: 'ok' } : (close > 0 ? { text: close + (close === 1 ? ' close match' : ' close matches'), kind: 'ok' } : { text: 'No matching products', kind: 'skip' }); }
 
-module.exports = { memberText: memberText, memberFooter: memberFooter, rupeesOf: rupeesOf, savings: savings, inr: inr, isFinal: isFinal, doneCount: doneCount, shortLine: shortLine, relevantByStore: relevantByStore, relevanceLine: relevanceLine, splitGroups: splitGroups, SKIP_TEXT: SKIP_TEXT };
+module.exports = { memberText: memberText, memberFooter: memberFooter, rupeesOf: rupeesOf, savings: savings, inr: inr, isFinal: isFinal, doneCount: doneCount, shortLine: shortLine, relevantByStore: relevantByStore, closeByStore: closeByStore, relevanceLine: relevanceLine, splitGroups: splitGroups, SKIP_TEXT: SKIP_TEXT };

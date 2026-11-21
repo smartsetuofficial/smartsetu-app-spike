@@ -18,12 +18,13 @@ function run(over) {
   const cls = new Set();
   const lines = [{ scrollWidth: 200 + over, clientWidth: 200 }, { scrollWidth: 190, clientWidth: 200 }, { scrollWidth: 200, clientWidth: 200 }];
   const h1 = { querySelectorAll: () => lines };
-  const root = { classList: { add: c => cls.add(c), remove: c => cls.delete(c) } };
+  const vars = {};
+  const root = { classList: { add: c => cls.add(c), remove: c => cls.delete(c) }, style: { setProperty: (k, v) => { vars[k] = v; }, removeProperty: k => { delete vars[k]; } } };
   const ev = {};
   const doc = { documentElement: root, querySelector: () => h1, fonts: { ready: { then: f => f() } } };
   const win = { addEventListener: (e, f) => { ev[e] = f; } };
   vm.runInNewContext(js, { document: doc, window: win });
-  return { has: cls.has('fitwrap'), ev, cls, lines };
+  return { has: cls.has('fitwrap'), ev, cls, lines, vars };
 }
 ok(run(0).has === false, 'no overflow: no class');
 ok(run(3).has === false, 'overflow 3 px (normal font): no class');
@@ -33,5 +34,14 @@ const r = run(30); r.lines[0].scrollWidth = 200; r.ev.resize();
 ok(r.cls.has('fitwrap') === false, 'resize with fitting text removes the class');
 const none = vm.runInNewContext(js + ';1', { document: { documentElement: {}, querySelector: () => null }, window: { addEventListener() {} } });
 ok(none === 1, 'no heading: script exits quietly');
+// S23-F-3 (D-138): measured ratio for the display texts
+ok(run(30).vars['--fitk'] === '0.84', 'overflow 30 on 200: ratio 0.84 (floor of 200/230 x 0.97)');
+ok(run(0).vars['--fitk'] === undefined, 'no overflow: no ratio variable');
+ok(run(8).vars['--fitk'] === undefined, 'overflow 8: no ratio variable');
+ok(run(2000).vars['--fitk'] === '0.55', 'huge overflow: ratio never below 0.55');
+ok(n(css, 'S23-F-3 (D-138)') === 1, 'css block S23-F-3 present once');
+ok(n(css, 'html.fitwrap .top .wrap{flex-wrap:nowrap}') === 1, 'header stays in one row at big font');
+ok(n(css, 'html.fitwrap .hero h1{font-size:calc(min(8.2vw,2rem)*var(--fitk,1))}') === 1, 'heading size uses the measured ratio');
+ok(css.indexOf('S23-F-3 (D-138)') > css.indexOf('S23-F-2a (D-133)'), 'S23-F-3 block comes after S23-F-2a');
 console.log('test_s23f2a: ' + pass + ' pass, ' + fail + ' fail');
 process.exit(fail ? 1 : 0);

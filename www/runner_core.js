@@ -94,7 +94,7 @@
     function acquire() { if (maxTabs === Infinity) return Promise.resolve(); return new Promise(function (res) { if (activeTabs < maxTabs) { activeTabs++; res(); } else waiting.push(res); }); }
     function release() { if (maxTabs === Infinity) return; activeTabs--; var w = waiting.shift(); if (w) { activeTabs++; w(); } }
     function tabJob(store, extra) {
-      return acquire().then(function () { return guarded(store); }).then(function (r) { release(); if (extra) Object.assign(r, extra); return r; }, function (e) { release(); throw e; });
+      return acquire().then(function () { if (o.deadlineAt && Date.now() > o.deadlineAt) return { store: store.label, key: store.key, state: 'skipped', stage: 'waiting', ms: 0 }; /* S23-6c: after the deadline no new store tab is opened */ return guarded(store); }).then(function (r) { release(); if (extra) Object.assign(r, extra); return r; }, function (e) { release(); throw e; });
     }
     function fetchJob(store) {
       var t0 = Date.now(), timer = null, ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, fetchMs = o.fetchMs == null ? 15000 : o.fetchMs;
@@ -112,7 +112,7 @@
         var off = { store: store.label, key: store.key, state: 'off', ms: 0 };
         runs.push(off); if (o.onUpdate) o.onUpdate(off); return Promise.resolve(off);
       }
-      return ((useFetch && fetchSet[store.key]) ? fetchJob(store) : tabJob(store)).then(function (r) { runs.push(r); if (o.onUpdate) o.onUpdate(r); return r; });
+      return ((useFetch && fetchSet[store.key]) ? fetchJob(store) : tabJob(store)).then(function (r) { r.doneAt = Date.now() - tStart; runs.push(r); if (o.onUpdate) o.onUpdate(r); return r; });
     });
     await Promise.all(jobs);
     tFirst = Date.now() - tStart;
