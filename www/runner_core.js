@@ -91,20 +91,36 @@
     // the same store is read by a tab exactly as before. o.maxTabs limits how many tabs are open at the same time (default: no limit, as before).
     var fetchSet = {}; (o.fetchFirst || []).forEach(function (k) { fetchSet[k] = 1; });
     var useFetch = typeof o.fetchRead === 'function', maxTabs = o.maxTabs > 0 ? o.maxTabs : Infinity, activeTabs = 0, waiting = [];
-    function acquire() { if (maxTabs === Infinity) return Promise.resolve(); return new Promise(function (res) { if (activeTabs < maxTabs) { activeTabs++; res(); } else waiting.push(res); }); }
-    function release() { if (maxTabs === Infinity) return; activeTabs--; var w = waiting.shift(); if (w) { activeTabs++; w(); } }
-    function tabJob(store, extra) {
-      return acquire().then(function () { if (o.deadlineAt && Date.now() > o.deadlineAt) return { store: store.label, key: store.key, state: 'skipped', stage: 'waiting', ms: 0 }; /* S23-6c: after the deadline no new store tab is opened */ return guarded(store); }).then(function (r) { release(); if (extra) Object.assign(r, extra); return r; }, function (e) { release(); throw e; });
+    // S23-9b (D-143): waiting tab jobs have a priority. A store whose plain fetch failed (it is likely readable) goes before stores that only have a tab (priority 0 before 1); same priority keeps the order of arrival.
+    function acquire(prio) { if (maxTabs === Infinity) return Promise.resolve(); return new Promise(function (res) { if (activeTabs < maxTabs) { activeTabs++; res(); } else { waiting.push({ p: prio == null ? 1 : prio, res: res }); waiting.sort(function (a, b) { return a.p - b.p; }); } }); }
+    function release() { if (maxTabs === Infinity) return; activeTabs--; var w = waiting.shift(); if (w) { activeTabs++; w.res(); } }
+    function tabJob(store, extra, prio) {
+      return acquire(prio).then(function () { if (o.deadlineAt && Date.now() > o.deadlineAt) return { store: store.label, key: store.key, state: 'skipped', stage: 'waiting', ms: 0 }; /* S23-6c: after the deadline no new store tab is opened */ return guarded(store); }).then(function (r) { release(); if (extra) Object.assign(r, extra); return r; }, function (e) { release(); throw e; });
     }
+    // S23-9b (D-143): a fetch that finished with no cards or an error gets ONE more try after the other first fetches are done (or after 2.5 s), before a tab is used. What each try saw (HTTP status, bytes, first words) is kept in fetchDiag.
+    var firstFetches = [];
     function fetchJob(store) {
-      var t0 = Date.now(), timer = null, ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null, fetchMs = o.fetchMs == null ? 15000 : o.fetchMs;
-      var guard = new Promise(function (res) { timer = setTimeout(function () { if (ctl) { try { ctl.abort(); } catch (_) {} } res({ fail: 'timeout' }); }, fetchMs); });
-      var work = Promise.resolve().then(function () { return o.fetchRead(store, query, ctl ? ctl.signal : undefined); })
-        .then(function (snap) { return (snap && Array.isArray(snap.cards) && snap.cards.length) ? { snap: snap } : { fail: 'no_cards' }; }, function () { return { fail: 'error' }; });
-      return Promise.race([work, guard]).then(function (w) {
-        clearTimeout(timer);
-        if (w.snap) return { store: store.label, key: store.key, state: 'ok', cards: w.snap.cards.length, snapshot: w.snap, ms: Date.now() - t0, via: 'fetch' };
-        return tabJob(store, { fetchFallback: w.fail, fetchMs: Date.now() - t0 });
+      var t0 = Date.now(), fetchMs = o.fetchMs == null ? 15000 : o.fetchMs, tries = 0;
+      function attempt() {
+        tries++;
+        var timer = null, ctl = (typeof AbortController !== 'undefined') ? new AbortController() : null;
+        var guard = new Promise(function (res) { timer = setTimeout(function () { if (ctl) { try { ctl.abort(); } catch (_) {} } res({ fail: 'timeout' }); }, fetchMs); });
+        var work = Promise.resolve().then(function () { return o.fetchRead(store, query, ctl ? ctl.signal : undefined); })
+          .then(function (snap) { return (snap && Array.isArray(snap.cards) && snap.cards.length) ? { snap: snap } : { fail: 'no_cards' }; }, function () { return { fail: 'error' }; });
+        return Promise.race([work, guard]).then(function (w) { clearTimeout(timer); return w; });
+      }
+      function diag() { try { return (typeof o.fetchDiag === 'function') ? (o.fetchDiag(store) || null) : null; } catch (_) { return null; } }
+      var first = attempt();
+      firstFetches.push(first.then(function () {}, function () {}));
+      return first.then(function (w) {
+        if (w.snap || w.fail === 'timeout' || o.fetchRetry === false) return w;
+        if (o.deadlineAt && Date.now() > o.deadlineAt) return w;
+        var d1 = diag();
+        var wait = Promise.race([Promise.all(firstFetches), new Promise(function (res) { setTimeout(res, o.fetchRetryWaitMs == null ? 2500 : o.fetchRetryWaitMs); })]);
+        return wait.then(attempt).then(function (w2) { w2.d1 = d1; return w2; });
+      }).then(function (w) {
+        if (w.snap) return { store: store.label, key: store.key, state: 'ok', cards: w.snap.cards.length, snapshot: w.snap, ms: Date.now() - t0, via: 'fetch', fetchTries: tries };
+        return tabJob(store, { fetchFallback: w.fail, fetchMs: Date.now() - t0, fetchTries: tries, fetchDiag: diag(), fetchDiag1: w.d1 || null }, 0);
       });
     }
     var jobs = STORES.map(function (store) {

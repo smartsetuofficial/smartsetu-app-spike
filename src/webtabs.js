@@ -547,7 +547,8 @@ async function pincodeSet(pin) {
   var field = function () { return Array.prototype.slice.call(document.querySelectorAll('input')).filter(function (e) { return vis(e) && /pin\s?code/i.test((e.placeholder || '') + ' ' + (e.getAttribute('aria-label') || '') + ' ' + (e.id || '')); })[0] || null; };
   var f = field();
   if (!f) {
-    var op = Array.prototype.slice.call(document.querySelectorAll('button,a,[role=button],div,span')).filter(function (e) { return vis(e) && e.children.length < 3 && /^(add|enter|update) pin\s?code$/i.test(txt(e)); })[0];
+    var isOp = function (e) { return vis(e) && e.children.length < 3 && /^(add|enter|update) pin\s?code$/i.test(txt(e)); };
+    var op = Array.prototype.slice.call(document.querySelectorAll('button,a,[role=button]')).filter(isOp)[0] || Array.prototype.slice.call(document.querySelectorAll('div,span')).filter(isOp).filter(function (e) { return !e.querySelector('button,a,[role=button]'); })[0]; // S23-9c: a real button first; a wrapper div that only contains one is not clicked
     if (op) { try { op.click(); steps.push('opened: ' + txt(op).slice(0, 30)); } catch (_) {} await wait(1200); f = field(); } else steps.push('no pincode opener found');
   }
   if (!f) return { found: false, steps: steps, after: '' };
@@ -555,16 +556,48 @@ async function pincodeSet(pin) {
   try { f.focus(); var d = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value'); d.set.call(f, pin); ['input', 'change', 'keyup'].forEach(function (n) { f.dispatchEvent(new Event(n, { bubbles: true })); }); } catch (e) { steps.push('typing failed: ' + String(e && e.message).slice(0, 40)); }
   await wait(700);
   steps.push('field now holds: ' + String(f.value || '').slice(0, 10));
-  var scope = f, btn = null;
-  for (var up = 0; up < 5 && scope && !btn; up++) {
+  // S23-9c (D-144): the first matching button ('Continue') did not set the pincode on the owner phone (field and 'Add Pincode' text stayed). Now every plausible apply control near the field is tried one after the other, best words first, until the pincode field is gone; between tries the value is put back if the page cleared it. Only controls within 6 parents of the field are touched; nothing else on the page is clicked.
+  var isOpener = function (t) { return /^(add|enter|update) pin\s?code$/i.test(t); };
+  var rank = function (e) {
+    var t = txt(e), lw = t.toLowerCase();
+    if (!t) return /close|cancel|dismiss|clear|back/i.test((e.getAttribute('aria-label') || '') + ' ' + (e.className && e.className.baseVal === undefined ? e.className : '')) ? 99 : 5;
+    if (/close|cancel|clear|skip|later|login|log in|sign in|detect|location|current/i.test(lw) || t.length > 24) return 99;
+    if (/^(apply|submit|check|update|confirm|save|set|check availability)\b/i.test(t)) return 1;
+    if (/apply|submit|check|update|confirm|save|^set/i.test(t)) return 2;
+    if (/continue|proceed|^go$|^done$|^ok$/i.test(t)) return 3;
+    return 99;
+  };
+  var seen = [], cands = [], scope = f;
+  for (var up = 0; up < 6 && scope; up++) {
     scope = scope.parentElement; if (!scope) break;
-    btn = Array.prototype.slice.call(scope.querySelectorAll('button,a,[role=button],input[type=submit],input[type=button]')).filter(function (e) { return vis(e) && /apply|update|submit|check|confirm|save|continue|proceed|^go$|add pin\s?code|^set/i.test(txt(e)); })[0] || null;
+    Array.prototype.slice.call(scope.querySelectorAll('button,a,[role=button],input[type=submit],input[type=button],[tabindex]')).forEach(function (e) {
+      if (seen.indexOf(e) > -1 || !vis(e) || e === f || e.contains(f) || isOpener(txt(e))) return;
+      var rk = rank(e); if (rk < 99) { seen.push(e); cands.push({ e: e, rk: rk, order: cands.length }); }
+    });
   }
-  if (btn) { try { btn.click(); steps.push('clicked: ' + txt(btn).slice(0, 30)); } catch (_) {} } else steps.push('no apply button near the field');
-  try { ['keydown', 'keypress', 'keyup'].forEach(function (n) { f.dispatchEvent(new KeyboardEvent(n, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); }); steps.push('Enter sent'); } catch (_) {}
+  cands.sort(function (x, y) { return x.rk - y.rk || x.order - y.order; });
+  var tried = 0;
+  for (var ci = 0; ci < cands.length && tried < 4; ci++) {
+    if (!f.isConnected || !field()) break;
+    var c = cands[ci].e; tried++;
+    try { if (String(f.value || '') !== pin) { var d2 = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value'); d2.set.call(f, pin); ['input', 'change'].forEach(function (n) { f.dispatchEvent(new Event(n, { bubbles: true })); }); await wait(300); } } catch (_) {}
+    var dis = !!(c.disabled || c.getAttribute('aria-disabled') === 'true');
+    try { c.click(); } catch (_) {}
+    await wait(1300);
+    var gone = !f.isConnected || !field();
+    steps.push('clicked: ' + (txt(c).slice(0, 24) || '(no text)') + ' [' + c.tagName.toLowerCase() + (dis ? ', disabled' : '') + '] -> ' + (gone ? 'pincode field gone' : 'field still there'));
+    if (gone) break;
+  }
+  if (!cands.length) steps.push('no apply control near the field');
+  if (f.isConnected && field()) {
+    try { ['keydown', 'keypress', 'keyup'].forEach(function (n) { f.dispatchEvent(new KeyboardEvent(n, { key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true })); }); steps.push('Enter sent'); } catch (_) {}
+    try { var fm = f.closest('form'); if (fm && typeof fm.requestSubmit === 'function') { fm.requestSubmit(); steps.push('form submitted'); } } catch (_) {}
+  }
   await wait(3500);
   var body = String((document.body && document.body.innerText) || '').replace(/\s+/g, ' '), m = body.match(/.{0,40}(?:pin\s?code|deliver\w*).{0,60}/i);
-  return { found: true, steps: steps, after: m ? m[0] : '', fieldStill: !!field() };
+  var still = !!field(), near = '';
+  if (still) { try { var h = f.parentElement && f.parentElement.parentElement ? f.parentElement.parentElement : f.parentElement; near = String(h ? h.outerHTML : '').replace(/\s+/g, ' ').replace(/(src|href|srcset|style|d|points)="[^"]{0,2000}"/gi, '$1=""').slice(0, 700); } catch (_) {} }
+  return { found: true, steps: steps, after: m ? m[0] : '', fieldStill: still, htmlNear: near };
 }
 // Reads Croma: opens the search page, sets the pincode, then reads the cards in the same page. Never throws. Same run shape as rescueRead, plus run.pin (what happened).
 async function pinRead(wt, store, query, pin, o) {
@@ -573,7 +606,7 @@ async function pinRead(wt, store, query, pin, o) {
   var base = { store: store.label, key: store.key, ms: Date.now() - t0, slow: true, retried: true, rescued: true };
   if (!res || !res.ok) { var rr = await rescueRead(wt, store, query, o); rr.pin = { used: pin, error: String((res && res.error) || 'no answer').slice(0, 100) }; return rr; }
   var pre = res.result || {}, r = res.results && res.results[0], cards = r && Array.isArray(r.cards) ? r.cards : [];
-  base.pin = { used: pin, found: !!pre.found, steps: pre.steps || [], after: pre.after || '', fieldStill: !!pre.fieldStill };
+  base.pin = { used: pin, found: !!pre.found, steps: pre.steps || [], after: pre.after || '', fieldStill: !!pre.fieldStill, htmlNear: String(pre.htmlNear || '').slice(0, 700) };
   if (!r) return Object.assign(base, { state: 'error', error: 'no card read after the pincode step', rescue: null });
   if (!cards.length) return Object.assign(base, { state: 'no_cards', cards: 0, rescue: r });
   var snap = { v: 1, kind: 'search', query: query, url: r.url, title: r.title, time: new Date().toISOString(), metas: [], ldJson: [], cards: cards, priceBoxes: [], struckBoxes: [], clickTexts: [], offerBoxes: [], pageOfferLines: [], pageAvailLines: [], probe: 'app-pin-0.10.13' };
@@ -583,7 +616,7 @@ function pinLines(run) {
   var p = run && run.pin; if (!p) return ['Croma pincode: not tried in this run'];
   var out = ['Croma pincode ' + p.used + ' | result: ' + (run.state === 'ok' ? 'FOUND ' + run.cards + ' cards' : run.state) + (p.error ? ' | page script failed: ' + p.error : '') + (p.found === false ? ' | pincode field NOT found' : '')];
   (p.steps || []).forEach(function (s) { out.push('step: ' + s); });
-  if (p.after) out.push('page text after: ' + p.after); if (p.fieldStill) out.push('pincode field still visible after the step');
+  if (p.after) out.push('page text after: ' + p.after); if (p.fieldStill) out.push('pincode field still visible after the step'); if (p.htmlNear) out.push('html near the field: ' + p.htmlNear);
   return out.concat(rescueLines(run.store, run));
 }
 function rescueLines(label, run) {

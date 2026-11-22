@@ -14,7 +14,7 @@ var Car = require('./carousel.js'); // S22g: Why SmartSetu cards slide one by on
 var AIF = require('./aiflow.js'); // S23-2c (D-132): glue to the AI Worker (query meaning + accessory labels), tested in Node with a fake worker
 var OF = require('./offerflow.js').make({ parser: SmartSetu.parser, adapter: SmartSetu.adapter, offers: SmartSetu.offers, isTileLine: W.isTileLine }); // S22b-2: offers under result rows (D-117)
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.24';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.25';
 var cards = [], offerRaw = {}, offerTok = 0, lastView = null; // member's own cards (phone only), offer lines read from product pages (by listing url), run token, last drawn view
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = {};
@@ -255,7 +255,7 @@ async function startRun(q, only) {
     }
     function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { if (gen !== runGen) return; updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, perStoreMs: STORE_MS, deadlineAt: live.t0 + GATE_MS, retryTimeouts: false }; }
     var pass1 = Object.assign({}, pl.enabled); pass1.Myntra = false; pass1.Croma = false; // S20b: Myntra is read on its own after the others (card rescue, below), it does not hold up the rest
-    var o1 = opts(pass1); o1.fetchFirst = SmartSetuFetchRead.STORES_OK; o1.fetchRead = fr; o1.fetchMs = 9000;
+    var o1 = opts(pass1); o1.fetchFirst = SmartSetuFetchRead.STORES_OK; o1.fetchRead = fr; o1.fetchMs = 9000; o1.fetchDiag = function (s) { return fr.last && fr.last[s.key] ? JSON.parse(JSON.stringify(fr.last[s.key])) : null; };
     tabs = mkTabs();
     out = await runStores(tabs, o1);
     if (gen !== runGen) return;
@@ -310,7 +310,7 @@ async function startRun(q, only) {
       }
     }
     if (live.timer) { clearTimeout(live.timer); live.timer = 0; }
-    if (!extra) { try { lastStores = (out.runs || []).map(function (r) { return { s: r.store, st: r.state, g: r.stage || null, ms: r.ms || 0, at: r.doneAt || null, fb: r.fetchFallback || null, via: r.via || null, n: r.cards == null ? null : r.cards }; }); } catch (_) { lastStores = null; } }
+    if (!extra) { try { lastStores = (out.runs || []).map(function (r) { return { s: r.store, st: r.state, g: r.stage || null, ms: r.ms || 0, at: r.doneAt || null, fb: r.fetchFallback || null, ft: r.fetchTries || null, fd: r.fetchDiag || null, fd1: r.fetchDiag1 || null, via: r.via || null, n: r.cards == null ? null : r.cards }; }); } catch (_) { lastStores = null; } }
     var fin = buildNow(out.seenAt);
     render(fin.view);
     if (!extra) live.skipped = pl.skipped;

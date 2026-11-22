@@ -9,15 +9,28 @@
   function sameSite(a, b) { try { var x = bare(new URL(a).hostname), y = bare(new URL(b).hostname); return x === y || x.endsWith('.' + y) || y.endsWith('.' + x); } catch (_) { return false; } }
 
   function make(fetchFn, snapFromHtml) {
-    return async function read(store, query, signal) {
-      var url = store.url(query);
+    // S23-9b (D-143): read.last[store.key] keeps what the LAST read of that store saw (HTTP status, bytes, first words, robot-check words, cards) for the owner report. No page text is stored beyond 60 characters, nothing is sent anywhere.
+    var last = {};
+    var read = async function read(store, query, signal) {
+      var url = store.url(query), d = last[store.key] = { http: null, bytes: null, head: '', robot: false, cards: null };
       var resp = await fetchFn(url, { credentials: 'omit', redirect: 'follow', cache: 'no-store', signal: signal });
+      d.http = resp ? resp.status : null;
       if (!resp || resp.status !== 200) return null;
-      if (!sameSite(url, resp.url || url)) return null;
+      if (!sameSite(url, resp.url || url)) { d.head = 'other site'; return null; }
       var txt = await resp.text();
-      if (typeof txt !== 'string' || txt.length < 1000 || txt.length > 6000000) return null;
-      return snapFromHtml(txt, resp.url || url, query);
+      if (typeof txt !== 'string') return null;
+      d.bytes = txt.length;
+      try {
+        var plain = txt.slice(0, 60000).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]*>/gi, ' ').replace(/\s+/g, ' ').trim();
+        d.head = plain.slice(0, 60); d.robot = /robot|captcha|verify you are human|access denied|unusual traffic|are you a human/i.test(plain.slice(0, 3000));
+      } catch (_) { /* diagnostics never block a read */ }
+      if (txt.length < 1000 || txt.length > 6000000) return null;
+      var snap = snapFromHtml(txt, resp.url || url, query);
+      try { d.cards = snap && snap.cards ? snap.cards.length : null; } catch (_) { /* ignore */ }
+      return snap;
     };
+    read.last = last;
+    return read;
   }
 
   var api = { STORES_OK: STORES_OK, make: make, sameSite: sameSite };
