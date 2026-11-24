@@ -18,7 +18,7 @@ ck('1c "Flat Rs 300 cashback" is not an instant discount, no flat amount', P.off
 ck('1d unknown store or bad input: no offers, no throw', P.offersFromLines('nostore', REL).length === 0 && P.offersFromLines('amazon', null).length === 0, 0);
 var ad = A.adaptOffers(o1).offers;
 ck('1e adapter flatPaise 40000 for a bank offer, null when none stated', ad[0].flatPaise === 40000 && ad[0].minOrderPaise === 500000 && ad[1].flatPaise === null && ad[0].bank === 'HDFC', ad);
-ck('1f parser 1.0.21', P.version === '1.0.21', P.version);
+ck('1f parser 1.0.22', P.version === '1.0.22', P.version);
 
 // 2 card matches: only then the price goes down
 var r = OF.assess('Reliance Digital', REL, P30K, ['HDFC']);

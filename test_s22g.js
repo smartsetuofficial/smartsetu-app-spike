@@ -81,7 +81,7 @@ ck('onSubmit no longer drops a second search', !/function onSubmit\(ev\) \{\s*ev
 ck('new search cancels the old (cancelRun, runGen)', /function cancelRun\(\)/.test(app) && /if \(busy\) \{ if \(only \|\| q === live\.q\)/.test(app) && /var gen = \+\+runGen;/.test(app));
 ck('same search twice while running is ignored with a message', /Already comparing this search/.test(app));
 var awaits = (app.match(/await W\.(rescueRead|pinRead|slowRead)\(|await runStores\(/g) || []).length, stale = (app.match(/if \(gen !== runGen\) return;/g) || []).length;
-ck('every await in startRun is followed by a stale check (' + awaits + ' awaits, ' + stale + ' checks)', awaits === 6 && stale >= awaits + 2);
+ck('every await in startRun is followed by a stale check (' + awaits + ' awaits, ' + stale + ' checks)', awaits === 7 && stale >= awaits + 2);
 ck('late answers of a cancelled run are ignored (onUpdate, catch)', /onUpdate: function \(r\) \{ if \(gen !== runGen\) return;/.test(app) && /\} catch \(e\) \{\s*if \(gen !== runGen\) return;/.test(app));
 ck('finally of a cancelled run does not touch the new run screen', /if \(gen === runGen\) \{[^]*?setBusy\(false\);/.test(app));
 ck('all store pages of a run are tracked and closed on cancel', !/tabs2 = (tabs2 \|\| )?W\.createWebTabs/.test(app) && (app.match(/mkTabs\(/g) || []).length >= 7 && /offerWt/.test(app));

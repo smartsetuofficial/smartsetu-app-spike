@@ -257,7 +257,7 @@ function pageUndef() { return undefined; }
   W.mergeRuns(outM, { runs: [sH] });
   ok(outM.runs[0].state === 'ok' && outM.runs[0].slow === true && outM.snapshots.length === 2, 'H14 a slow run replaces the timed-out run and its snapshot is used');
   var appH = read('src/app.js');
-  ok(/VERSION = '0\.10\.25'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && !/'3rd try'|'2nd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'H15 app wiring: slow third try (no try label on the member screen, R13), one runAll inside runStores, 2 callers');
+  ok(/VERSION = '0\.10\.25'/.test(appH) && /W\.timedOutLabels\(out\.runs\)/.test(appH) && /W\.slowRead\(tabs2, storeOf\(slowL\[sl\]\), q, smartsetuCollect, \{\}\)/.test(appH) && !/'3rd try'|'2nd try'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 4, 'H15 app wiring: slow third try (no try label on the member screen, R13), one runAll inside runStores, 3 callers');
 
   // B: the real runner_core with the shim: 9 stores, Myntra off, one webview at a time, all closed, Amazon read and compared
   if (fxSnap) {
@@ -344,7 +344,7 @@ function pageUndef() { return undefined; }
   ok(rl.length === 2 && /still 0 cards/.test(rl[0]) && /price elements 59/.test(rl[0]) && /grid 40/.test(rl[0]) && /^Cut html 1 /.test(rl[1]), 'J11 rescue report lines show counts and the cut html');
   var jrep = W.buildReport({ version: 'v', rescue: ['Flipkart rescue: x'] });
   ok(/CARD RESCUE \(S14-1g\)/.test(jrep) && /Flipkart rescue: x/.test(jrep), 'J12 report has a CARD RESCUE section');
-  ok(/W\.rescueRead\(tabs2, storeOf\(empty\[em\]\), q, \{\}\)/.test(appH) && /var empty = W\.failingLabels\(out\.runs\)/.test(appH) && /rr\.state === 'ok'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 3, 'J13 app wiring: rescue only for stores still empty, an ok run replaces the empty one, one runAll inside runStores');
+  ok(/W\.rescueRead\(tabs2, storeOf\(empty\[em\]\), q, \{\}\)/.test(appH) && /var empty = W\.failingLabels\(out\.runs\)/.test(appH) && /rr\.state === 'ok'/.test(appH) && (appH.match(/\.runAll\(/g) || []).length === 1 && (appH.match(/runStores\(/g) || []).length === 4, 'J13 app wiring: rescue only for stores still empty, an ok run replaces the empty one, one runAll inside runStores');
   var rescSrc = W.cardRescue.toString();
   ok(rescSrc.indexOf('fetch(') < 0 && rescSrc.indexOf('XMLHttpRequest') < 0 && rescSrc.indexOf('localStorage') < 0 && rescSrc.indexOf('document.cookie') < 0 && rescSrc.indexOf('eval(') < 0, 'J14 page function reads only: no network, storage, cookie, eval');
 
@@ -391,7 +391,7 @@ function pageUndef() { return undefined; }
   ok(pkg.version === '0.10.25' && !/probe: true/.test(appjs) && !/showDiag|showReport|copyReport/.test(appjs), 'D3b app version 0.10.15, no diagnostic or report wired in app.js (the hidden store test lives in devtest.js, D-096)');
   ok(/test_app\.js/.test(pkg.scripts.test) && /test_spike\.js/.test(pkg.scripts.test), 'D3 npm test runs both test files');
   ok(appjs.indexOf('innerHTML') < 0 && (appjs.match(/localStorage/g) || []).length === 1 && /OF\.loadCards\(store\)/.test(appjs) && appjs.indexOf('fetch(') < 0 && appjs.indexOf('eval(') < 0, 'D4 app.js: no innerHTML, storage only for the member own card list (D-117, S22b-2), no network call, no eval');
-  ok((appjs.match(/\.runAll\(/g) || []).length === 1 && (appjs.match(/runStores\(/g) || []).length === 3 && appjs.indexOf('await runStores(') > appjs.indexOf('async function startRun') && (appjs.match(/startRun\(/g) || []).length === 3 && /addEventListener\('submit', onSubmit\)/.test(appjs) && /getElementById\('morebtn'\)|\$\('morebtn'\)\.addEventListener\('click'/.test(appjs), 'D5 stores start only inside startRun, reached only from the Compare submit or the also-check tap (D-010)');
+  ok((appjs.match(/\.runAll\(/g) || []).length === 1 && (appjs.match(/runStores\(/g) || []).length === 4 && appjs.indexOf('await runStores(') > appjs.indexOf('async function startRun') && (appjs.match(/startRun\(/g) || []).length === 4 && /async function fullRun\(q, useAI\)[^]*?await startRun\(q, null\)/.test(appjs) && /fullRun: fullRun, testMode:/.test(appjs) && /if \(testing\) \{ say\('Full Test Mode is running/.test(appjs) && /addEventListener\('submit', onSubmit\)/.test(appjs) && /getElementById\('morebtn'\)|\$\('morebtn'\)\.addEventListener\('click'/.test(appjs), 'D5 stores start only inside startRun, reached only from the Compare submit, the also-check tap or the owner Full Test Mode tap (D-010, D-151)');
   ok(/customUserAgent/.test(appjs) && !/readOffers|structureProbe/.test(appjs) && (appjs.match(/offerProbe/g) || []).length === 1 && /async function runOffers/.test(appjs) && /desktopUa\(navigator\.userAgent\)/.test(appjs) && /retry && run\.state === 'off'/.test(appjs), 'D6b second try kept, structure and offers reads gone');
   ok(/maxTabs: 1/.test(appjs) && /foreground: false/.test(appjs) && /enabledMap\(\)/.test(appjs), 'D6 one store at a time, hidden, Myntra off');
   var order = ['bundle.js', 'pagesnap.js', 'runner_core.js', 'view.js', 'app.js'].map(function (f) { return html.indexOf('src="' + f + '"'); });
@@ -516,7 +516,7 @@ function pageUndef() { return undefined; }
     var az7 = or7.runs.filter(function (r) { return r.store === 'Amazon'; })[0];
     ok(az7 && az7.state === 'ok' && az7.ms < 1500 && Date.now() - t7 < 2000 && wr7.earlyCount() === 1, 'R7 real runner: a store whose load event never comes is read in ' + (az7 && az7.ms) + ' ms, not after the 4000 ms load limit'); wr7.dispose();
   }
-  ok(/function mkTabs\(ua\) \{ var t = W\.createWebTabs\(ua \? pluginApi\(ua\) : pluginApi\(\), \{ ready: true \}\)/.test(appjs) && (appjs.match(/\{ ready: true \}/g) || []).length === 2 && (appjs.match(/mkTabs\(/g) || []).length === 7 && /function readyCount/.test(read('src/webtabs.js')), 'R8 app turns the ready option on for all seven webtabs objects (first pass, second try, slow read, rescue, Myntra, Croma, offers)');
+  ok(/function mkTabs\(ua\) \{ var t = W\.createWebTabs\(ua \? pluginApi\(ua\) : pluginApi\(\), \{ ready: true \}\)/.test(appjs) && (appjs.match(/\{ ready: true \}/g) || []).length === 2 && (appjs.match(/mkTabs\(/g) || []).length === 8 && /function readyCount/.test(read('src/webtabs.js')), 'R8 app turns the ready option on for all eight webtabs objects (first pass, deferred stores, second try, slow read, rescue, Myntra, Croma, offers)');
 
   // L: S15b (D-097) premium look: bigger type, glow, trust strip, stronger cards. Every claim on the screen is checked against the real code.
   var SMq = require('./src/storemap.js'), cssL = read('www/app.css'), htmlL = read('www/index.html');

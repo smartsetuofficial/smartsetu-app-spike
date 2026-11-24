@@ -43,7 +43,7 @@ var g = G(fake);
 ck('2a exact cluster member is drawn, tier 2 without miss is not', g.stores.filter(function (s) { return s.store === 'amazon'; })[0].items.length === 1, g);
 ck('2b tier 2 with miss is a close match', g.stores.filter(function (s) { return s.store === 'flipkart'; })[0].close.length === 1, g);
 ck('2c specific query (model and brand) still has no generic block', G({ query: { models: ['141'], brand: { key: 'b' } }, clusters: fake.clusters, quarantine: [] }).mode === 'specific', 0);
-ck('2d generic version 1.1.2', require('../compare-engine/generic.js').version === '1.1.2', 0);
+ck('2d generic version 1.1.3', require('../compare-engine/generic.js').version === '1.1.3', 0);
 
 // 3 store line texts
 ck('3a line: matching', U.relevanceLine(3, 0).text === '3 matching listings', 0);

@@ -243,7 +243,7 @@ async function startRun(q, only) {
     var userQ = q; // S23-2c: the member's own words; the AI may turn them into a clean search phrase + price cap, then THAT is what every store gets
     if (!extra) {
       live.userQ = userQ; live.aiSearch = ''; aiLast = { q: userQ, at: new Date().toISOString() };
-      if (AIX.on()) {
+      if (AIX.on() && !noAI) { // S23-10h: Full Test Mode switches the AI off for 9 of its 12 searches
         say('Understanding your search...');
         var aiR = await AIX.rewrite(userQ);
         if (gen !== runGen) return;
@@ -254,29 +254,47 @@ async function startRun(q, only) {
       }
     }
     function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { if (gen !== runGen) return; updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, perStoreMs: STORE_MS, deadlineAt: live.t0 + GATE_MS, retryTimeouts: false }; }
-    var pass1 = Object.assign({}, pl.enabled); pass1.Myntra = false; pass1.Croma = false; // S20b: Myntra is read on its own after the others (card rescue, below), it does not hold up the rest
+    var pass1 = Object.assign({}, pl.enabled); pass1.Myntra = false; pass1.Croma = false; var ord = M.order(q, R.STORES, pl.enabled, SmartSetuFetchRead.STORES_OK, ['myntra', 'croma']); ord.defer.forEach(function (l) { pass1[l] = false; }); /* S23-10e (D-150): tab stores that do not usually sell this kind of product wait until the likely stores are done; none is dropped */ // S20b: Myntra is read on its own after the others (card rescue, below), it does not hold up the rest
     var o1 = opts(pass1); o1.fetchFirst = SmartSetuFetchRead.STORES_OK; o1.fetchRead = fr; o1.fetchMs = 9000; o1.fetchDiag = function (s) { return fr.last && fr.last[s.key] ? JSON.parse(JSON.stringify(fr.last[s.key])) : null; };
     tabs = mkTabs();
     out = await runStores(tabs, o1);
     if (gen !== runGen) return;
     adopt(out.runs);
     function skipRun(label) { var st = storeOf(label); return { store: st.label, key: st.key, state: 'skipped', stage: 'waiting', ms: 0 }; }
-    if (pl.enabled.Myntra && late()) { var ms0 = skipRun('Myntra'); W.mergeRuns(out, { runs: [ms0] }); ms0.retried = false; updateProgress(ms0); adopt([ms0]); }
-    else if (pl.enabled.Myntra) {
-      say('Checking Myntra...');
-      tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
-      var mr = await W.rescueRead(tabs2, storeOf('Myntra'), q, {});
-      if (gen !== runGen) return;
-      W.mergeRuns(out, { runs: [mr] }); updateProgress(mr); adopt([mr]); liveRender();
+    async function stepMyntra() {
+      if (pl.enabled.Myntra && late()) { var ms0 = skipRun('Myntra'); W.mergeRuns(out, { runs: [ms0] }); ms0.retried = false; updateProgress(ms0); adopt([ms0]); }
+      else if (pl.enabled.Myntra) {
+        say('Checking Myntra...');
+        tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
+        var mr = await W.rescueRead(tabs2, storeOf('Myntra'), q, {});
+        if (gen !== runGen) return;
+        W.mergeRuns(out, { runs: [mr] }); updateProgress(mr); adopt([mr]); liveRender();
+      }
     }
-    if (pl.enabled.Croma && late()) { var cs0 = skipRun('Croma'); W.mergeRuns(out, { runs: [cs0] }); cs0.retried = false; updateProgress(cs0); adopt([cs0]); }
-    else if (pl.enabled.Croma) { // S21e: Croma needs a pincode before it shows products; the app types a fixed one (owner: the listing does not change), see W.pincodeSet
-      say('Checking Croma...');
-      tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
-      var cr = await W.pinRead(tabs2, storeOf('Croma'), q, W.CROMA_PIN, {});
-      if (gen !== runGen) return;
-      W.mergeRuns(out, { runs: [cr] }); updateProgress(cr); adopt([cr]); liveRender();
+    async function stepCroma() {
+      if (pl.enabled.Croma && late()) { var cs0 = skipRun('Croma'); W.mergeRuns(out, { runs: [cs0] }); cs0.retried = false; updateProgress(cs0); adopt([cs0]); }
+      else if (pl.enabled.Croma) { // S21e: Croma needs a pincode before it shows products; the app types a fixed one (owner: the listing does not change), see W.pincodeSet
+        say('Checking Croma...');
+        tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
+        var cr = await W.pinRead(tabs2, storeOf('Croma'), q, W.CROMA_PIN, {});
+        if (gen !== runGen) return;
+        W.mergeRuns(out, { runs: [cr] }); updateProgress(cr); adopt([cr]); liveRender();
+      }
     }
+    var stepOf = { Myntra: stepMyntra, Croma: stepCroma };
+    for (var hi = 0; hi < ord.hi.length; hi++) { await stepOf[ord.hi[hi]](); if (gen !== runGen) return; }
+    if (ord.defer.length) { // S23-10e: the deferred tab stores, same kind of tab as the first pass (no desktop user agent)
+      if (late()) { ord.defer.forEach(function (l) { var r0 = skipRun(l); W.mergeRuns(out, { runs: [r0] }); r0.retried = false; updateProgress(r0); adopt([r0]); }); }
+      else {
+        say('Checking ' + ord.defer.join(', ') + '...');
+        var tabs3 = mkTabs();
+        var rdf = await runStores(tabs3, opts(W.enabledOnly(R.STORES, ord.defer)));
+        if (gen !== runGen) return;
+        W.mergeRuns(out, rdf); ord.defer.forEach(function (l) { var rr0 = out.runs.filter(function (x) { return x.store === l; })[0]; if (rr0) rr0.retried = false; });
+        adopt(out.runs); liveRender();
+      }
+    }
+    for (var lo = 0; lo < ord.lo.length; lo++) { await stepOf[ord.lo[lo]](); if (gen !== runGen) return; }
     var notMyntra = function (l) { return l !== 'Myntra' && l !== 'Croma'; };
     var bad = late() ? [] : W.failingLabels(out.runs).filter(notMyntra); // S23-6c: no second try after the time gate
     if (bad.length) {
@@ -383,8 +401,18 @@ function initCards() {
   $('cardsclear').addEventListener('click', function () { Array.prototype.forEach.call(ul.querySelectorAll('input'), function (x) { x.checked = false; }); apply([]); });
   refreshCardsBtn();
 }
+// ---- S23-10h (D-151): Full Test Mode hook, used ONLY by the owner panel (devsuite.js via devtest.js), after the owner taps its button (D-010). One normal Compare per call; the AI only when asked; no offer pages. ----
+var testing = false, noAI = false;
+async function fullRun(q, useAI) {
+  var t0 = Date.now(); lastStores = null; lastView = null; noAI = !useAI;
+  try { await startRun(q, null); offerTok++; } finally { noAI = false; }
+  var rows = []; try { rows = W.rowsOf(lastView).map(function (r) { return { store: r.store, price: r.price, title: r.title, url: r.url }; }); } catch (_) { rows = []; }
+  return { ms: Date.now() - t0, stores: lastStores || [], rows: rows, ai: aiLast, runs: allRuns().map(function (r) { return { store: r.store, state: r.state, snapshot: r.snapshot || null }; }) };
+}
+// ---- end S23-10h ----
 function onSubmit(ev) {
   ev.preventDefault();
+  if (testing) { say('Full Test Mode is running. Wait for it to finish.'); return; }
   var q = $('q').value.trim();
   if (!q) { say('Type what you want to buy, for example "boAt Airdopes 141".'); return; }
   startRun(q, null);
@@ -397,7 +425,7 @@ document.addEventListener('DOMContentLoaded', function () {
   var qi = $('q'), qc = $('qclear');
   function syncClear() { qc.hidden = !qi.value; }
   qi.addEventListener('input', function () { syncClear(); if (busy) $('golabel').textContent = (qi.value.trim() && qi.value.trim() !== live.q) ? 'Compare this instead' : 'Comparing...'; }); qc.addEventListener('click', function () { qi.value = ''; syncClear(); qi.focus(); }); syncClear();
-  $('morebtn').addEventListener('click', function () { if (!busy && live.skipped.length) startRun(live.q, live.skipped.slice()); });
+  $('morebtn').addEventListener('click', function () { if (!busy && !testing && live.skipped.length) startRun(live.q, live.skipped.slice()); });
   Array.prototype.forEach.call(document.querySelectorAll('.chip'), function (c) { c.addEventListener('click', function () { $('q').value = c.getAttribute('data-q') || ''; $('q').focus(); }); });
   // A store link opens in the phone's own browser window (Chrome Custom Tab), not inside the app page.
   $('results').addEventListener('click', function (ev) {
@@ -407,5 +435,5 @@ document.addEventListener('DOMContentLoaded', function () {
     ev.preventDefault();
     InAppBrowser.open({ url: u });
   });
-  Dev.attach({ trigger: $('logo'), isBusy: function () { return busy; }, setBusy: setBusy, query: function () { return $('q').value.trim(); }, version: VERSION, R: R, V: V, W: W, C: C, M: M, NF: NF, http: CapacitorHttp, pluginApi: pluginApi, collect: smartsetuCollect, SmartSetu: SmartSetu, SnapDoc: SmartSetuSnapDoc, fetchRead: SmartSetuFetchRead, aiDiag: aiDiag });
+  Dev.attach({ trigger: $('logo'), isBusy: function () { return busy; }, setBusy: setBusy, query: function () { return $('q').value.trim(); }, version: VERSION, R: R, V: V, W: W, C: C, M: M, NF: NF, http: CapacitorHttp, pluginApi: pluginApi, collect: smartsetuCollect, SmartSetu: SmartSetu, SnapDoc: SmartSetuSnapDoc, fetchRead: SmartSetuFetchRead, aiDiag: aiDiag, fullRun: fullRun, testMode: function (on) { testing = !!on; } });
 });

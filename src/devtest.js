@@ -2,6 +2,7 @@
  * Opens only after 7 quick taps on the logo. Runs every store once the slow way and once the fast way, then shows ONE plain-text report the owner can copy.
  * Reads only what the store pages show (same page functions as before), sends nothing anywhere, stores nothing. */
 'use strict';
+var Suite = require('./devsuite.js'); // S23-10h (D-151): Full Test Mode, 12 searches + per-store quality gate
 
 function strip(html) { return String(html || '').replace(/<script[^]*?<\/script>/gi, ' ').replace(/<style[^]*?<\/style>/gi, ' ').replace(/<[^>]*>/g, ' ').replace(/&nbsp;/g, ' ').replace(/\s+/g, ' ').trim(); }
 function flags(text) {
@@ -97,6 +98,8 @@ function attach(env) {
     var h = document.createElement('h2'); h.textContent = 'Store test'; panel.appendChild(h);
     var p = document.createElement('p'); p.className = 'note'; p.textContent = 'For the owner only. Opens every store and writes one report. It takes several minutes. Keep the app open.'; panel.appendChild(p);
     var go = document.createElement('button'); go.type = 'button'; go.className = 'btn'; go.textContent = 'Run full store test'; panel.appendChild(go);
+    var full = document.createElement('button'); full.type = 'button'; full.className = 'btn'; full.textContent = 'Run Full Test Mode (12 searches)'; panel.appendChild(full); // S23-10h
+    var stopBtn = document.createElement('button'); stopBtn.type = 'button'; stopBtn.className = 'btn ghost'; stopBtn.textContent = 'Stop after this search'; stopBtn.hidden = true; panel.appendChild(stopBtn);
     var status = document.createElement('p'); status.className = 'note'; panel.appendChild(status);
     var semline = document.createElement('p'); semline.className = 'note semline'; panel.appendChild(semline); // S22f-2 part 3: what the last meaning check did (filled when the panel opens)
     var ta = document.createElement('textarea'); ta.readOnly = true; ta.rows = 12; ta.className = 'devout'; ta.hidden = true; panel.appendChild(ta);
@@ -108,6 +111,18 @@ function attach(env) {
       try { var rep = await runFull(env, function (t) { status.textContent = t; }); ta.value = rep; ta.hidden = false; cp.hidden = false; status.textContent = 'Done. Tap Copy report and paste it to the AI.'; }
       catch (e) { status.textContent = 'The test could not finish: ' + String((e && e.message) || e).slice(0, 120); }
       finally { env.setBusy(false); go.disabled = false; }
+    });
+    var stopNow = false;
+    stopBtn.addEventListener('click', function () { stopNow = true; stopBtn.hidden = true; status.textContent = 'Stopping after the search that is running...'; });
+    full.addEventListener('click', async function () { // S23-10h: about 15 to 25 minutes (not measured). A partial report is shown after every search.
+      if (env.isBusy()) { status.textContent = 'A comparison is running. Wait for it to finish.'; return; }
+      if (!env.fullRun) { status.textContent = 'Full Test Mode is not wired in this build.'; return; }
+      go.disabled = true; full.disabled = true; stopNow = false; stopBtn.hidden = false; ta.hidden = true; cp.hidden = true; if (env.testMode) env.testMode(true);
+      try {
+        var rep = await Suite.runSuite({ run: env.fullRun, parse: env.SmartSetu.parseSearch, version: env.version, ua: navigator.userAgent }, { log: function (t) { status.textContent = t; }, stop: function () { return stopNow; }, partial: function (t) { ta.value = t; ta.hidden = false; cp.hidden = false; } });
+        ta.value = rep; ta.hidden = false; cp.hidden = false; status.textContent = stopNow ? 'Stopped. The report so far is below. Tap Copy report.' : 'Done. Tap Copy report and paste it to the AI.';
+      } catch (e) { status.textContent = 'Full Test Mode could not finish: ' + String((e && e.message) || e).slice(0, 120) + '. The report so far (if any) is below.'; }
+      finally { if (env.testMode) env.testMode(false); go.disabled = false; full.disabled = false; stopBtn.hidden = true; }
     });
     cp.addEventListener('click', function () {
       var done = function () { status.textContent = 'Copied.'; };
@@ -121,4 +136,4 @@ function attach(env) {
   });
 }
 
-module.exports = { attach: attach, runFull: runFull, fastLine: fastLine, flags: flags, strip: strip };
+module.exports = { Suite: Suite, attach: attach, runFull: runFull, fastLine: fastLine, flags: flags, strip: strip };

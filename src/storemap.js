@@ -72,4 +72,24 @@ function pick(q, stores) {
   return { cats: cats, keys: keys, skip: skip };
 }
 
-module.exports = { classify: classify, pick: pick, SELLS: SELLS, CAT_WORD: CAT_WORD, TERMS: TERMS };
+// S23-10e (D-150): ORDER only, never a skip. rank(q, stores) -> { key: 0 | 1 }; 1 = the query is of a known category and this store does not usually sell it (a guess table, V-271).
+function rank(q, stores) {
+  var cats = classify(q), out = {};
+  (stores || []).forEach(function (s) { var sells = SELLS[s.key] || []; out[s.key] = (cats.length && !ALWAYS[s.key] && !cats.some(function (c) { return sells.indexOf(c) >= 0; })) ? 1 : 0; });
+  return out;
+}
+// Which tab-only stores wait until the likely ones are done (defer), and whether each special store (own reader, after the first pass) goes before (hi) or after (lo) that deferred pass.
+// Unknown category: defer is empty and hi keeps the order of `special`, so the order is the same as before. Every store is still read; only the time gate can skip one, as before.
+function order(q, stores, enabled, fetchKeys, special) {
+  var rk = rank(q, stores), defer = [], hi = [], lo = [];
+  (stores || []).forEach(function (s) {
+    if (enabled && enabled[s.label] === false) return;
+    if ((special || []).indexOf(s.key) >= 0) return;
+    if ((fetchKeys || []).indexOf(s.key) >= 0) return;
+    if (rk[s.key] === 1) defer.push(s.label);
+  });
+  (special || []).forEach(function (k) { var s = (stores || []).filter(function (x) { return x.key === k; })[0]; if (!s) return; (rk[k] === 1 ? lo : hi).push(s.label); });
+  return { defer: defer, hi: hi, lo: lo, rank: rk };
+}
+
+module.exports = { rank: rank, order: order, classify: classify, pick: pick, SELLS: SELLS, CAT_WORD: CAT_WORD, TERMS: TERMS };
