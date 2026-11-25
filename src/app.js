@@ -14,7 +14,7 @@ var Car = require('./carousel.js'); // S22g: Why SmartSetu cards slide one by on
 var AIF = require('./aiflow.js'); // S23-2c (D-132): glue to the AI Worker (query meaning + accessory labels), tested in Node with a fake worker
 var OF = require('./offerflow.js').make({ parser: SmartSetu.parser, adapter: SmartSetu.adapter, offers: SmartSetu.offers, isTileLine: W.isTileLine }); // S22b-2: offers under result rows (D-117)
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.25';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.26';
 var cards = [], offerRaw = {}, offerTok = 0, lastView = null; // member's own cards (phone only), offer lines read from product pages (by listing url), run token, last drawn view
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = {};
@@ -233,6 +233,7 @@ async function startRun(q, only) {
   offerTok++; if (!only) offerRaw = {};
   say(''); setBusy(true);
   var tabs = null, tabs2 = null, out = null, pl = plan(q, only), extra = !!only;
+  var fbPrio = {}; try { var rkk = M.rank(q, R.STORES); Object.keys(rkk).forEach(function (k) { fbPrio[k] = rkk[k] === 1 ? 3 : 0; }); } catch (_) { fbPrio = {}; } // S23-11 (D-155): a fetch store that does not usually sell this search gets its fallback tab after the likely stores
   var fr = SmartSetuFetchRead.make(NF.makeFetch(CapacitorHttp, C.desktopUa(navigator.userAgent)), SmartSetuSnapDoc.snapFromHtml);
   function late() { return Date.now() - live.t0 > GATE_MS; }
   try {
@@ -253,7 +254,7 @@ async function startRun(q, only) {
         if (aq) { q = aq; live.q = aq; live.aiSearch = aiR.search; aiLabels = { isA: AIX.isAFor(aiR.search), isP: AIX.isPFor(aiR.search) }; } // S23-5: the first draw already asks the engine which cards it could not confirm (aiInfo.unsure); labels of the same phrase from memory apply at once
       }
     }
-    function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { if (gen !== runGen) return; updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, perStoreMs: STORE_MS, deadlineAt: live.t0 + GATE_MS, retryTimeouts: false }; }
+    function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { if (gen !== runGen) return; updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, fallbackPrio: fbPrio, perStoreMs: STORE_MS, deadlineAt: live.t0 + GATE_MS, retryTimeouts: false }; }
     var pass1 = Object.assign({}, pl.enabled); pass1.Myntra = false; pass1.Croma = false; var ord = M.order(q, R.STORES, pl.enabled, SmartSetuFetchRead.STORES_OK, ['myntra', 'croma']); ord.defer.forEach(function (l) { pass1[l] = false; }); /* S23-10e (D-150): tab stores that do not usually sell this kind of product wait until the likely stores are done; none is dropped */ // S20b: Myntra is read on its own after the others (card rescue, below), it does not hold up the rest
     var o1 = opts(pass1); o1.fetchFirst = SmartSetuFetchRead.STORES_OK; o1.fetchRead = fr; o1.fetchMs = 9000; o1.fetchDiag = function (s) { return fr.last && fr.last[s.key] ? JSON.parse(JSON.stringify(fr.last[s.key])) : null; };
     tabs = mkTabs();
@@ -328,7 +329,7 @@ async function startRun(q, only) {
       }
     }
     if (live.timer) { clearTimeout(live.timer); live.timer = 0; }
-    if (!extra) { try { lastStores = (out.runs || []).map(function (r) { return { s: r.store, st: r.state, g: r.stage || null, ms: r.ms || 0, at: r.doneAt || null, fb: r.fetchFallback || null, ft: r.fetchTries || null, fd: r.fetchDiag || null, fd1: r.fetchDiag1 || null, via: r.via || null, n: r.cards == null ? null : r.cards }; }); } catch (_) { lastStores = null; } }
+    if (!extra) { try { lastStores = (out.runs || []).map(function (r) { return { s: r.store, st: r.state, g: r.stage || null, ms: r.ms || 0, at: r.doneAt || null, fb: r.fetchFallback || null, ft: r.fetchTries || null, fd: r.fetchDiag || null, fd1: r.fetchDiag1 || null, via: r.via || null, nr: r.noResults ? 1 : null, n: r.cards == null ? null : r.cards }; }); } catch (_) { lastStores = null; } }
     var fin = buildNow(out.seenAt);
     render(fin.view);
     if (!extra) live.skipped = pl.skipped;

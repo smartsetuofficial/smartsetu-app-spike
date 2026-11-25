@@ -15,7 +15,7 @@ function line(label, st, n, ms, g) { return { s: label, st: st, g: g || null, ms
 // ---- 1. the 12 searches ----
 var Q = S.QUERIES;
 ck('1a twelve searches, ids 1 to 12, all different words', Q.length === 12 && Q.every(function (x, i) { return x.id === i + 1; }) && new Set(Q.map(function (x) { return x.q; })).size === 12, Q.length);
-ck('1b the AI is allowed on exactly 3 searches: budget, wrong spelling, Hinglish', Q.filter(function (x) { return x.ai; }).map(function (x) { return x.tag; }).join('|') === 'budget|wrong spelling|Hinglish', Q.filter(function (x) { return x.ai; }).map(function (x) { return x.tag; }));
+ck('1b the AI is allowed on exactly 4 searches: budget, wrong spelling, Hinglish, very long (S23-11b item 8)', Q.filter(function (x) { return x.ai; }).map(function (x) { return x.tag; }).join('|') === 'budget|wrong spelling|Hinglish|very long', Q.filter(function (x) { return x.ai; }).map(function (x) { return x.tag; }));
 ck('1c exactly one nonsense search and it has no on-topic words', Q.filter(function (x) { return x.nores; }).length === 1 && Q.filter(function (x) { return x.nores; })[0].on === '', 0);
 ck('1d every other search has on-topic words that compile', Q.filter(function (x) { return !x.nores; }).every(function (x) { try { return !!new RegExp(x.on, 'i'); } catch (_) { return false; } }), 0);
 var tags = Q.map(function (x) { return x.tag; }).join(' ');
@@ -80,7 +80,7 @@ function fakeEnv(opts) {
   var partials = [], logs = [];
   var rep = await S.runSuite(fakeEnv(), { log: function (t) { logs.push(t); }, partial: function (t) { partials.push(t); } });
   ck('4a all 12 searches ran, in order', calls.length === 12 && calls.every(function (c, i) { return c.q === Q[i].q; }), calls.map(function (c) { return c.q; }));
-  ck('4b the AI was asked for on exactly 3 searches (budget, spelling, Hinglish)', calls.filter(function (c) { return c.ai; }).map(function (c) { return c.q; }).join('|') === 'smartphones under 10000|samsung galaxi s24|sasta earphones 1000 ke andar', calls.filter(function (c) { return c.ai; }));
+  ck('4b the AI was asked for on exactly 4 searches (budget, spelling, Hinglish, very long)', calls.filter(function (c) { return c.ai; }).map(function (c) { return c.q; }).join('|') === 'smartphones under 10000|samsung galaxi s24|sasta earphones 1000 ke andar|best budget gaming laptop with 16gb ram and rtx graphics card under 70000 for students', calls.filter(function (c) { return c.ai; }));
   ck('4c a partial report after every search, only the last one is not partial', partials.length === 12 && partials.slice(0, 11).every(function (p) { return /PARTIAL/.test(p); }) && !/PARTIAL/.test(partials[11]) && !/PARTIAL/.test(rep), partials.map(function (p) { return /PARTIAL/.test(p); }));
   ck('4d partial reports grow search by search', partials.every(function (p, i) { return p.indexOf('Searches done: ' + (i + 1) + ' of 12') >= 0; }), 0);
   ck('4e progress text names the search and when the AI is allowed', logs.length === 12 && /Search 3 of 12: smartphones under 10000 \(AI allowed\)/.test(logs[2]) && !/AI allowed/.test(logs[0]), logs.slice(0, 3));
@@ -88,10 +88,10 @@ function fakeEnv(opts) {
   ck('4g part 1 has a line for each of the 8 fake stores with a verdict', STORES.every(function (s) { return new RegExp('- ' + s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + ' \\| (PASS|WARN|FAIL|OFF|NODATA) \\|').test(rep); }), 0);
   ck('4h Croma gave no listings anywhere = FAIL in the report', /- Croma \| FAIL \|/.test(rep), rep.split('\n').filter(function (l) { return /^- Croma/.test(l); }));
   ck('4i the Ajio skip on one search shows in part 1 and part 2', /- Ajio \|[^\n]*skipped 1 \|/.test(rep) && /- Ajio \| skipped \|/.test(rep), 0);
-  ck('4j AI searches show the rewrite and refine lines, others do not', (rep.match(/AI rewrite:/g) || []).length === 3 && (rep.match(/AI refine:/g) || []).length === 3 && /AI rewrite: \{"search":"clean smartphones under 10000","max_price":10000/.test(rep), (rep.match(/AI rewrite:/g) || []).length);
+  ck('4j AI searches show the rewrite and refine lines, others do not', (rep.match(/AI rewrite:/g) || []).length === 4 && (rep.match(/AI refine:/g) || []).length === 4 && /AI rewrite: \{"search":"clean smartphones under 10000","max_price":10000/.test(rep), (rep.match(/AI rewrite:/g) || []).length);
   ck('4k only the first 6 result rows of a search are printed', (rep.match(/  row: /g) || []).length === 12 * 6 && /result rows 8/.test(rep), (rep.match(/  row: /g) || []).length);
   ck('4l the report stays pasteable (under 30000 characters) for 12 searches x 8 stores', rep.length < 30000, rep.length);
-  ck('4m no snapshot html survives in the report', !/<div|<span|<a href/.test(rep), 0);
+  ck('4m no snapshot html survives in the report, except the short card sample of PART 3 (S23-11b item 7)', !/<div|<span|<a href/.test(rep.split('PART 3')[0]), 0);
   var sm = S.summarise(Q[0], { ms: 1, stores: [line('Flipkart', 'ok', 24, 1000)], runs: [{ store: 'Flipkart', state: 'ok', snapshot: real('Flipkart') }], rows: [], ai: null }, parse);
   ck('4n the kept record is small (no snapshot is kept)', JSON.stringify(sm).length < 1500 && JSON.stringify(sm).indexOf('"cards"') < 0, JSON.stringify(sm).length);
   // a search that crashes does not stop the rest

@@ -18,7 +18,7 @@ var QUERIES = [
   { id: 8, q: 'protein powder', ai: false, tag: 'grocery and health', on: 'protein|whey|isolate|gainer|nutrition|powder|supplement' },
   { id: 9, q: 'kids school bag', ai: false, tag: 'kids', on: 'bag|backpack|school|trolley' },
   { id: 10, q: 'washing machine 7 kg front load', ai: false, tag: 'large appliance', on: 'washing|washer|front load|top load|laundry' },
-  { id: 11, q: 'best budget gaming laptop with 16gb ram and rtx graphics card under 70000 for students', ai: false, tag: 'very long', on: 'laptop|notebook|gaming|rtx|nvidia|ideapad|vivobook|inspiron|thinkpad|victus|loq|tuf|nitro|legion' },
+  { id: 11, q: 'best budget gaming laptop with 16gb ram and rtx graphics card under 70000 for students', ai: true, tag: 'very long', on: 'laptop|notebook|gaming|rtx|nvidia|ideapad|vivobook|inspiron|thinkpad|victus|loq|tuf|nitro|legion' },
   { id: 12, q: 'xqzvtn blorptex', ai: false, tag: 'no result', on: '', nores: true }
 ];
 
@@ -43,13 +43,24 @@ function analyseRun(run, parse, item) {
     var k = titleKey(c.title); if (k) { if (seen[k]) o.dups++; else seen[k] = 1; }
     if (re) { if (re.test(' ' + String(c.title || '').toLowerCase() + ' ')) o.on++; else o.off++; }
   });
+  // S23-11b (D-156, item 7): a search where this store repeats titles above the limit keeps 2 repeated titles and about 700 characters of ONE raw card, so the cause can be read in the report (no guess fix before that)
+  try {
+    if (o.parsed > 0 && o.dups * 100 / o.parsed > LIMITS.repeat) {
+      var cnt = {}, rep = [], first = null;
+      (p.cards || []).forEach(function (c) { var k = titleKey(c.title); if (!k) return; cnt[k] = (cnt[k] || 0) + 1; if (cnt[k] === 2) { if (!first) first = c; if (rep.length < 2) rep.push(oneLine(c.title, 70)); } });
+      var raw = (run.snapshot.cards || []), hit = null;
+      if (first && first.id) hit = raw.filter(function (rc) { return rc && typeof rc.html === 'string' && rc.html.indexOf(String(first.id)) >= 0; })[0] || null;
+      if (!hit) hit = raw.filter(function (rc) { return rc && typeof rc.html === 'string' && rc.html; })[0] || null;
+      o.dupTitles = rep; o.dupHtml = hit ? oneLine(hit.html, 700) : null;
+    }
+  } catch (_) { /* report only */ }
   return o;
 }
 
 // One finished search (the object env.run gave back) -> the small record the report keeps.
 function summarise(item, one, parse) {
   var lines = (one && one.stores) || [], byLabel = {}, order = [];
-  lines.forEach(function (l) { if (l && l.s && !byLabel[l.s]) { byLabel[l.s] = { label: l.s, state: l.st, stage: l.g || null, ms: l.ms == null ? null : l.ms, n: l.n == null ? null : l.n }; order.push(l.s); } });
+  lines.forEach(function (l) { if (l && l.s && !byLabel[l.s]) { byLabel[l.s] = { label: l.s, state: l.st, nr: l.nr ? 1 : 0, stage: l.g || null, ms: l.ms == null ? null : l.ms, n: l.n == null ? null : l.n, via: l.via || null, fb: l.fb || null, ft: l.ft || null, fd: l.fd ? oneLine(JSON.stringify(l.fd), 220) : null, fd1: l.fd1 ? oneLine(JSON.stringify(l.fd1), 220) : null }; order.push(l.s); } });
   ((one && one.runs) || []).forEach(function (r) {
     if (!r || !r.store) return;
     if (!byLabel[r.store]) { byLabel[r.store] = { label: r.store, state: r.state, stage: null, ms: null, n: null }; order.push(r.store); }
@@ -71,7 +82,7 @@ function gate(sums) {
       if (st.state === 'off') { a.off++; return; }
       if (s.item.nores) { a.nonsense = st.parsed; return; }
       a.counted++;
-      if (st.state === 'skipped') a.skipped++; else if (st.state !== 'ok') { a.failed++; a.stages[st.stage || st.state] = 1; }
+      if (st.state === 'skipped') a.skipped++; else if (st.state !== 'ok' && !st.nr) { a.failed++; a.stages[st.stage || st.state] = 1; }
       if (st.parsed > 0) a.productive++;
       a.parsed += st.parsed; a.priced += st.priced; a.linked += st.linked; a.dups += st.dups; a.on += st.on; a.offTopic += st.off; a.onTested += st.on + st.off;
       if (st.ms != null && st.state !== 'skipped') { a.msSum += st.ms; a.msN++; if (st.ms > a.msMax) a.msMax = st.ms; }
@@ -115,10 +126,16 @@ function buildReport(p) {
     L.push('', '=== ' + it.id + '/' + total + ' | ' + it.q + ' | ' + it.tag + ' | AI ' + (it.ai ? 'allowed' : 'off') + ' | ' + secs(s.ms) + ' | result rows ' + s.rowCount + (s.error ? ' | ERROR ' + s.error : ''));
     if (s.ai && s.ai.rewrite) L.push('AI rewrite: ' + oneLine(JSON.stringify(s.ai.rewrite), 200));
     if (s.ai && s.ai.refine) L.push('AI refine: ' + oneLine(JSON.stringify(s.ai.refine), 200));
-    s.stores.forEach(function (st) { L.push('- ' + st.label + ' | ' + st.state + ' | ' + (st.n == null ? '-' : st.n) + ' | ' + st.parsed + ' | ' + st.priced + ' | ' + secs(st.ms) + (st.stage ? ' | ' + st.stage : '') + (st.parseError ? ' | parse error ' + st.parseError : '')); });
+    s.stores.forEach(function (st) { L.push('- ' + st.label + ' | ' + (st.nr ? 'no_results' : st.state) + ' | ' + (st.n == null ? '-' : st.n) + ' | ' + st.parsed + ' | ' + st.priced + ' | ' + secs(st.ms) + (st.stage ? ' | ' + st.stage : '') + (st.parseError ? ' | parse error ' + st.parseError : '')); // S23-11b (D-156, item 6): why a store went to a tab and what the plain fetch saw
+      if (st.fb) L.push('    fetch fallback: ' + st.fb + ' | tries ' + (st.ft == null ? '-' : st.ft) + ' | fetch saw ' + (st.fd || '-') + (st.fd1 ? ' | first try saw ' + st.fd1 : '') + ' | finished via ' + (st.via || 'tab'));
+    });
     s.rows.forEach(function (r) { L.push('  row: ' + r.store + ' | ' + (r.price || '-') + ' | ' + r.title); });
     if (!s.rows.length) L.push('  row: (none)');
   });
+  var rp = []; // S23-11b (D-156, item 7): first search per store that had repeated titles above the limit
+  var seenRp = {};
+  sums.forEach(function (s) { s.stores.forEach(function (st) { if (st.dupTitles && !seenRp[st.label]) { seenRp[st.label] = 1; rp.push('- ' + st.label + ' | search ' + s.item.id + ' (' + s.item.q + ') | repeated titles: ' + st.dupTitles.join(' || ') + '\n    card html: ' + (st.dupHtml || '(none)')); } }); });
+  if (rp.length) { L.push('', 'PART 3: REPEATED TITLES ABOVE ' + LIMITS.repeat + '% (2 repeated titles and about 700 characters of one raw card, first search per store)'); rp.forEach(function (x) { L.push(x); }); }
   return L.join('\n');
 }
 

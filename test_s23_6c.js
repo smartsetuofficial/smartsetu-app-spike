@@ -70,7 +70,7 @@ function wiring() {
   ck('5b the old 100 s late gate and the 50 s store budget are gone', !/> 100000/.test(app) && !/perStoreMs: 50000/.test(app), 0);
   ck('5c Myntra, Croma and the second try are gated by late()', /pl\.enabled\.Myntra && late\(\)/.test(app) && /pl\.enabled\.Croma && late\(\)/.test(app) && /var bad = late\(\) \? \[\]/.test(app), 0);
   ck('5d report line has every store (state, stage, seconds, fallback)', /lastStores = \(out\.runs/.test(app) && /STORES /.test(app) && /storesDiag\(\)/.test(app), 0);
-  ck('5e version 0.10.25', /VERSION = '0\.10\.25'/.test(app) && JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version === '0.10.25', 0);
+  ck('5e version 0.10.26', /VERSION = '0\.10\.26'/.test(app) && JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version === '0.10.26', 0);
   ck('5f paintRelevance passes the close count', /U\.closeByStore\(res\)/.test(app) && /U\.relevanceLine\(rel\[run\.key\], cls\[run\.key\] \|\| 0\)/.test(app), 0);
   console.log('test_s23_6c: ' + pass + ' pass, ' + fail + ' fail'); process.exit(fail ? 1 : 0);
 }

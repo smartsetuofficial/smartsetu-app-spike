@@ -24,6 +24,7 @@
     } catch (e) { /* never block the app */ }
     try { fitHeader(); } catch (e) { /* never block the app */ }
     try { fitPlaceholder(); } catch (e) { /* never block the app */ }
+    try { fitHeight(); } catch (e) { /* never block the app */ }
   }
   /* S23-9 (D-142): the logo row (logo + motto + tag) is measured too, not only the heading. If the tag would touch the logo text or leave the screen, the row texts shrink step by step; if even 0.5 does not fit, the tag drops to its own row. */
   function fitHeader() {
@@ -64,6 +65,45 @@
     for (var i = 0; i < opts.length; i++) { if (c.measureText(opts[i]).width <= have) { pick = opts[i]; break; } }
     if (inp.getAttribute('placeholder') !== pick) inp.setAttribute('placeholder', pick);
   }
+  /* S23-12 (D-157): the idle home screen (no results, no progress, no card panel) must show everything from the logo to the slogan on one screen, on any phone height. Steps from the least to the most visible change, each tested by measuring the real page height: (1) gaps, card height and footer space shrink by a ratio, (2) the 'Why SmartSetu' card turns into a compact row, (3) the privacy note (it is also a slide) is hidden, (4) the lead line is hidden. Heading, logo, search and Compare button are never made smaller by this step. Not applied in landscape or while the keyboard is open. No storage, no network. */
+  var HF_CLS = ['hfit', 'hfrow', 'hfpriv', 'hflead'];
+  function idleHome() {
+    var ids = ['progress', 'empty', 'morebox', 'cardspanel'];
+    for (var i = 0; i < ids.length; i++) { var n = document.getElementById(ids[i]); if (n && !n.hidden) return false; }
+    var r = document.getElementById('results');
+    return !(r && r.firstChild);
+  }
+  function fitHeight() {
+    HF_CLS.forEach(function (c) { root.classList.remove(c); });
+    root.style.removeProperty('--hf'); root.style.removeProperty('--hft');
+    var vh = window.innerHeight, vw = window.innerWidth;
+    if (!vh || !vw || vw > vh || !idleHome()) return;
+    var ae = document.activeElement;
+    if (ae && ae.tagName === 'INPUT') { return; }
+    function over() { return root.scrollHeight - vh; }
+    if (over() <= 1) return;
+    var sets = [[['hfit'], 0.76], [['hfit', 'hfrow'], 0.6], [['hfit', 'hfrow', 'hfpriv'], 0.6], [['hfit', 'hfrow', 'hfpriv', 'hflead'], 0.4]];
+    for (var s = 0; s < sets.length; s++) {
+      HF_CLS.forEach(function (c) { root.classList.remove(c); });
+      sets[s][0].forEach(function (c) { root.classList.add(c); });
+      for (var hf = 1; hf >= sets[s][1] - 0.001; hf -= 0.04) {
+        root.style.setProperty('--hf', String(Math.round(hf * 100) / 100));
+        root.style.setProperty('--hft', String(Math.max(Math.round(hf * 100) / 100, 0.82)));
+        if (over() <= 1) return;
+      }
+    }
+  }
+  var hfTimer = 0;
+  function hfSoon() { if (hfTimer) clearTimeout(hfTimer); hfTimer = setTimeout(function () { hfTimer = 0; try { fitHeight(); } catch (e) { /* never block the app */ } }, 60); }
+  try {
+    if (typeof MutationObserver === 'function') {
+      var mo = new MutationObserver(hfSoon);
+      ['progress', 'results', 'empty', 'morebox', 'cardspanel'].forEach(function (id) {
+        var n = document.getElementById(id); if (n) mo.observe(n, { attributes: true, attributeFilter: ['hidden'], childList: true });
+      });
+    }
+    window.addEventListener('focusout', function () { setTimeout(hfSoon, 350); });
+  } catch (e) { /* never block the app */ }
   fit();
   window.addEventListener('resize', fit);
   window.addEventListener('orientationchange', fit);

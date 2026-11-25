@@ -152,7 +152,7 @@ function createWebTabs(plugin, o) {
 // ---- S14-1c data build (D-083): second try with a Chrome identity, page structure of still-empty stores, offers read from one product page per store.
 function sleep(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
 function sameSite(a, b) { var x = String(a).toLowerCase().split('.').slice(-2).join('.'), y = String(b).toLowerCase().split('.').slice(-2).join('.'); return x === y; }
-function failingLabels(runs) { return (runs || []).filter(function (r) { return r.state === 'no_cards' || r.state === 'no_data'; }).map(function (r) { return r.store; }); }
+function failingLabels(runs) { return (runs || []).filter(function (r) { return (r.state === 'no_cards' && !r.noResults) || r.state === 'no_data'; }).map(function (r) { return r.store; }); } // S23-11 (D-155): a store whose page was read and had no results is not retried
 function enabledOnly(stores, labels) { var m = {}; stores.forEach(function (s) { m[s.label] = labels.indexOf(s.label) >= 0; }); return m; }
 // Put the runs of the second pass into the first result (same store label), then rebuild the snapshot list. Stores that were off in the second pass are skipped.
 function mergeRuns(out, out2) {

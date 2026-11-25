@@ -71,19 +71,30 @@
   }
 
   // o: { query, enabled:{label:bool}, foreground, collect(fn), onUpdate(run), perStoreMs, loadMs, settleMs }
+  // S23-11 (D-155) pure helpers (tested in node).
+  // How long a tab may take. 0 = do not open it: no deadline known = the old per store cap; the deadline passed, or less than tailMs (default 6 s) left = no new tab; otherwise the cap is the time left, at most the per store cap and at least minMs (default 6 s).
+  function budgetFor(perStore, deadlineAt, now, minMs, tailMs) {
+    if (!deadlineAt) return perStore;
+    var left = deadlineAt - now, tail = tailMs == null ? 6000 : tailMs, min = minMs == null ? 6000 : minMs;
+    if (left <= 0 || left < tail) return 0;
+    return Math.max(min, Math.min(perStore, left));
+  }
+  // d = what the plain fetch saw (fetchread.js last[key]). True only for a normal page with zero cards.
+  function emptyPageIsNoResults(d) { return !!d && d.http === 200 && d.cards === 0 && d.robot === false && typeof d.bytes === 'number' && d.bytes >= 1000; }
   async function runAll(api, o) {
     var query = String((o && o.query) || '').trim();
     if (!query) throw new Error('empty query');
     if (typeof o.collect !== 'function') throw new Error('collect function missing');
     var enabled = o.enabled || {}, perStore = o.perStoreMs == null ? 60000 : o.perStoreMs;
     var runs = [], tStart = Date.now(), tFirst = 0;
-    function guarded(store) {
+    function guarded(store, capMs) {
+      var cap = capMs > 0 ? capMs : perStore;
       var ctx = { tabId: null, stage: 'opening', stageAt: Date.now(), loaded: null }, timer = null;
       var guard = new Promise(function (res) {
         timer = setTimeout(function () {
           if (ctx.tabId != null) { try { Promise.resolve(api.tabs.remove(ctx.tabId)).catch(function () {}); } catch (_) {} }
-          res({ store: store.label, key: store.key, state: 'timeout', stage: ctx.stage, stageMs: Date.now() - ctx.stageAt, loaded: ctx.loaded, ms: perStore });
-        }, perStore);
+          res({ store: store.label, key: store.key, state: 'timeout', stage: ctx.stage, stageMs: Date.now() - ctx.stageAt, loaded: ctx.loaded, ms: cap });
+        }, cap);
       });
       return Promise.race([runStore(api, store, query, o, ctx), guard]).then(function (r) { clearTimeout(timer); return r; });
     }
@@ -95,7 +106,7 @@
     function acquire(prio) { if (maxTabs === Infinity) return Promise.resolve(); return new Promise(function (res) { if (activeTabs < maxTabs) { activeTabs++; res(); } else { waiting.push({ p: prio == null ? 1 : prio, res: res }); waiting.sort(function (a, b) { return a.p - b.p; }); } }); }
     function release() { if (maxTabs === Infinity) return; activeTabs--; var w = waiting.shift(); if (w) { activeTabs++; w.res(); } }
     function tabJob(store, extra, prio) {
-      return acquire(prio).then(function () { if (o.deadlineAt && Date.now() > o.deadlineAt) return { store: store.label, key: store.key, state: 'skipped', stage: 'waiting', ms: 0 }; /* S23-6c: after the deadline no new store tab is opened */ return guarded(store); }).then(function (r) { release(); if (extra) Object.assign(r, extra); return r; }, function (e) { release(); throw e; });
+      return acquire(prio).then(function () { var cap = budgetFor(perStore, o.deadlineAt, Date.now(), o.minTabMs, o.tailMs); if (cap === 0) return { store: store.label, key: store.key, state: 'skipped', stage: 'waiting', ms: 0 }; /* S23-6c: after the deadline no new store tab is opened; S23-11 (D-155): also not in the last seconds before it */ return guarded(store, cap); }).then(function (r) { release(); if (extra) Object.assign(r, extra); return r; }, function (e) { release(); throw e; });
     }
     // S23-9b (D-143): a fetch that finished with no cards or an error gets ONE more try after the other first fetches are done (or after 2.5 s), before a tab is used. What each try saw (HTTP status, bytes, first words) is kept in fetchDiag.
     var firstFetches = [];
@@ -120,7 +131,11 @@
         return wait.then(attempt).then(function (w2) { w2.d1 = d1; return w2; });
       }).then(function (w) {
         if (w.snap) return { store: store.label, key: store.key, state: 'ok', cards: w.snap.cards.length, snapshot: w.snap, ms: Date.now() - t0, via: 'fetch', fetchTries: tries };
-        return tabJob(store, { fetchFallback: w.fail, fetchMs: Date.now() - t0, fetchTries: tries, fetchDiag: diag(), fetchDiag1: w.d1 || null }, 0);
+        var dg = diag();
+        // S23-11 (D-155): a page that was read fine (HTTP 200, a normal size, no robot words) and had 0 cards is a store with NO results for this search, not a failure: no tab fallback (it cost 20 s in 7 of 12 searches of the first Full Test, V-594). Anything unclear (blocked, other site, tiny page, error, timeout) keeps the tab fallback.
+        if (w.fail === 'no_cards' && o.fetchEmptyIsNoResults !== false && emptyPageIsNoResults(dg)) return { store: store.label, key: store.key, state: 'no_cards', cards: 0, noResults: true, ms: Date.now() - t0, via: 'fetch', fetchTries: tries, fetchDiag: dg, fetchDiag1: w.d1 || null };
+        var fp = o.fallbackPrio && typeof o.fallbackPrio[store.key] === 'number' ? o.fallbackPrio[store.key] : 0; // S23-11 (D-155): a fetch store that does not usually sell this search waits behind the likely stores
+        return tabJob(store, { fetchFallback: w.fail, fetchMs: Date.now() - t0, fetchTries: tries, fetchDiag: dg, fetchDiag1: w.d1 || null }, fp);
       });
     }
     var jobs = STORES.map(function (store) {
@@ -152,6 +167,6 @@
     };
   }
 
-  var api = { STORES: STORES, runAll: runAll, runStore: runStore, waitLoad: waitLoad };
+  var api = { STORES: STORES, runAll: runAll, runStore: runStore, waitLoad: waitLoad, budgetFor: budgetFor, emptyPageIsNoResults: emptyPageIsNoResults };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.SmartSetuRunner = api;
 })(typeof globalThis !== 'undefined' ? globalThis : self);
