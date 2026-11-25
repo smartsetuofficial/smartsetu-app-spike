@@ -24,6 +24,7 @@
     } catch (e) { /* never block the app */ }
     try { fitHeader(); } catch (e) { /* never block the app */ }
     try { fitPlaceholder(); } catch (e) { /* never block the app */ }
+    try { fitOneLine(); } catch (e) { /* never block the app */ }
     try { fitHeight(); } catch (e) { /* never block the app */ }
   }
   /* S23-9 (D-142): the logo row (logo + motto + tag) is measured too, not only the heading. If the tag would touch the logo text or leave the screen, the row texts shrink step by step; if even 0.5 does not fit, the tag drops to its own row. */
@@ -74,6 +75,10 @@
     return !(r && r.firstChild);
   }
   function fitHeight() {
+    try { fitHeightCore(); } catch (e) { /* never block the app */ }
+    try { fitGrow(); } catch (e) { /* never block the app */ }
+  }
+  function fitHeightCore() {
     HF_CLS.forEach(function (c) { root.classList.remove(c); });
     root.style.removeProperty('--hf'); root.style.removeProperty('--hft');
     var vh = window.innerHeight, vw = window.innerWidth;
@@ -92,6 +97,40 @@
         if (over() <= 1) return;
       }
     }
+  }
+  /* S23-14 (D-159): (a) the eyebrow, the card-offers hint and the slogan stay on ONE line: the text shrinks step by step (measured, never below its minimum); only if even the minimum does not fit does that one text wrap as before. (b) idle home taller than its content: the slogan is pinned to the bottom of the screen (class idlehome) and the Why cards take part of the spare height (class hgrow, --hg), so every phone height looks the same. Nothing changes when the page already fills the screen. No storage, no network. */
+  var OL = [['eb', '.eyebrow', 0.62], ['cs', '.cardsrow .cr-s', 0.7], ['sl', '.slogan', 0.7]];
+  function fitOneLine() {
+    for (var i = 0; i < OL.length; i++) {
+      var key = OL[i][0], el = document.querySelector(OL[i][1]);
+      root.classList.remove('ol-' + key); root.style.removeProperty('--o-' + key);
+      if (!el) continue;
+      root.classList.add('ol-' + key);
+      var k = 1, fit1 = false;
+      for (;;) {
+        root.style.setProperty('--o-' + key, String(Math.round(k * 100) / 100));
+        if (el.scrollWidth <= el.clientWidth + 1) { fit1 = true; break; }
+        k -= 0.04;
+        if (k < OL[i][2] - 0.001) break;
+      }
+      if (!fit1) { root.classList.remove('ol-' + key); root.style.removeProperty('--o-' + key); }
+    }
+  }
+  function fitGrow() {
+    root.classList.remove('idlehome'); root.classList.remove('hgrow'); root.style.removeProperty('--hg');
+    var vh = window.innerHeight, vw = window.innerWidth;
+    if (!vh || !vw || vw > vh || !idleHome()) return;
+    var ae = document.activeElement;
+    if (ae && ae.tagName === 'INPUT') return;
+    var foot = document.querySelector('.foot'), li = document.querySelector('.perks li');
+    var spare = vh - foot.getBoundingClientRect().bottom;
+    var cur = li.offsetHeight;
+    root.classList.add('idlehome');
+    if (spare < 20) return;
+    var grow = Math.min(Math.floor((spare - 8) * 0.6), 72);
+    if (grow < 8) return;
+    root.style.setProperty('--hg', (cur + grow) + 'px'); root.classList.add('hgrow');
+    if (root.scrollHeight - vh > 1) { root.classList.remove('hgrow'); root.style.removeProperty('--hg'); }
   }
   var hfTimer = 0;
   function hfSoon() { if (hfTimer) clearTimeout(hfTimer); hfTimer = setTimeout(function () { hfTimer = 0; try { fitHeight(); } catch (e) { /* never block the app */ } }, 60); }

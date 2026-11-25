@@ -421,3 +421,12 @@ html.hfrow .perks .pd{margin-top:0.125rem;font-size:calc(0.8125rem*var(--hft,1))
 html.hfpriv .privacy{display:none}
 html.hflead .hero .lead{display:none}
 html.hflead .hero h1{margin-bottom:calc(1.25rem*var(--hf,1))}
+
+/* ===== S23-14 (D-159): one-line texts and bottom-pinned slogan. fitguard.js adds ol-eb, ol-cs, ol-sl (one line, --o-* ratio), idlehome (slogan at the bottom) and hgrow (--hg card height) only when measured. ===== */
+html.ol-eb .eyebrow{white-space:nowrap;font-size:calc(0.59375rem*var(--o-eb,1))}
+html.ol-cs .cardsrow .cr-s{white-space:nowrap;overflow:hidden;text-overflow:clip;font-size:calc(0.8125rem*var(--o-cs,1))}
+html.ol-sl .slogan{white-space:nowrap;font-size:calc(0.8125rem*var(--o-sl,1))}
+html.idlehome body{display:flex;flex-direction:column;min-height:100vh;min-height:100dvh}
+html.idlehome .foot{margin-top:auto;min-height:0;padding-bottom:calc(var(--sab) + 2.6rem)}
+html.hgrow .perks li{min-height:var(--hg)}
+html.hfit .perks{padding-bottom:max(calc(2.5rem*var(--hf,1)),1.7rem)}
