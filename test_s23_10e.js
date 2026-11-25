@@ -39,8 +39,8 @@ ck('9 rank is 0 or 1 only', QS.every(function (q) { var r = M.rank(q, ST); retur
 var app = fs.readFileSync(path.join(__dirname, 'src/app.js'), 'utf8');
 ck('10 app.js asks storemap.order with the fetch list and the two special stores', /var ord = M\.order\(q, R\.STORES, pl\.enabled, SmartSetuFetchRead\.STORES_OK, \['myntra', 'croma'\]\)/.test(app), 0);
 ck('11 deferred stores are switched off in pass 1 only', /ord\.defer\.forEach\(function \(l\) \{ pass1\[l\] = false; \}\)/.test(app), 0);
-var iHi = app.indexOf('ord.hi.length'), iDef = app.indexOf('if (ord.defer.length)'), iLo = app.indexOf('ord.lo.length');
-ck('12 order in startRun: hi special stores, deferred pass, lo special stores', iHi > 0 && iDef > iHi && iLo > iDef, [iHi, iDef, iLo]);
+var iHi = app.indexOf('var hiDone'), iDef = app.indexOf('if (ord.defer.length)'), iLo = app.indexOf('await hiDone');
+ck('12 order in startRun (S23-13): Myntra and Croma start first on their own slot (hi before lo inside), the deferred pass runs beside them, then we wait for them', iHi > 0 && iDef > iHi && iLo > iDef && /ord\.hi\.concat\(ord\.lo\)/.test(app), [iHi, iDef, iLo]);
 ck('13 deferred pass: same tab kind as pass 1 (mkTabs without user agent), time gate respected, never dropped', /var tabs3 = mkTabs\(\);/.test(app) && /runStores\(tabs3, opts\(W\.enabledOnly\(R\.STORES, ord\.defer\)\)\)/.test(app) && /if \(late\(\)\) \{ ord\.defer\.forEach/.test(app) && /var SKIP_BY_WORDS = false;/.test(app), 0);
 ck('14 the deferred pass is read like any store (not a retry): retried flag cleared', /rr0\.retried = false/.test(app), 0);
 console.log('test_s23_10e: ' + pass + ' pass, ' + fail + ' fail');

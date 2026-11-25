@@ -38,7 +38,7 @@ function createWebTabs(plugin, o) {
   var execMs = o.execMs == null ? 45000 : o.execMs;
   // S15b (D-097, ALL stores): o.ready = true. A page whose load event never comes (Tata CLiQ on the phone, 'load event NO', V-212; Ajio and others sometimes) is not waited for the full limit: when the page text shows at least readyMin price amounts and the count stays the same on two checks in a row, the tab counts as complete. The real load event, when it comes first, wins. Without o.ready nothing changes.
   var readyOn = o.ready === true, readyAfter = o.readyAfterMs == null ? 3000 : o.readyAfterMs, readyEvery = o.readyEveryMs == null ? 1500 : o.readyEveryMs, readyMin = o.readyMin == null ? 6 : o.readyMin, readyProbeMs = o.readyProbeMs == null ? 3000 : o.readyProbeMs, readyStops = {}, earlyIds = {};
-  var listeners = [], pending = {}, loaded = {}, current = null, opening = false, earlyLoad = false, seq = 0, unsubs = [], inited = null, probe = o.probe === true, lastProbe = null, opened = {};
+  var listeners = [], pending = {}, loaded = {}, current = null, opening = false, earlyLoad = false, seq = 0, inst = Math.random().toString(36).slice(2, 7), seenLoad = {}, unsubs = [], inited = null, probe = o.probe === true, lastProbe = null, opened = {};
 
   function onMsg(ev) {
     var d = detailOf(ev); if (!d || !d.cid) return;
@@ -49,7 +49,13 @@ function createWebTabs(plugin, o) {
     delete pending[d.cid]; clearTimeout(p.timer);
     if (d.ok) p.resolve([{ result: d.result }]); else p.reject(new Error(d.error || 'page script failed'));
   }
-  function onLoad() {
+  function onLoad(ev) {
+    var lid = ev && ev.id != null ? ev.id : null;
+    if (lid != null) { // S23-13 (D-158): the plugin names the page that finished (V-599, official source). With two pages open (also from two WebTabs objects) each load belongs to its own page only
+      if (opened[lid]) { loaded[lid] = true; listeners.slice().forEach(function (l) { try { l(lid, { status: 'complete' }); } catch (_) {} }); }
+      else seenLoad[lid] = true; // came before open() gave the id back, or it is the other object's page
+      return;
+    }
     if (opening) { earlyLoad = true; return; } // the page finished loading before the plugin gave back the id
     if (current == null) return;
     loaded[current] = true;
@@ -87,9 +93,10 @@ function createWebTabs(plugin, o) {
       return init().then(function () {
         opening = true; earlyLoad = false; lastProbe = null;
         return Promise.resolve(plugin.open({ url: spec.url, visible: !!spec.active })).then(function (id) {
-          current = id; loaded[id] = earlyLoad; opening = false; if (id != null) opened[id] = 1;
-          if (readyOn && id != null && !earlyLoad) startReady(id);
-          return { id: id, status: earlyLoad ? 'complete' : 'loading' };
+          var early = earlyLoad || (id != null && seenLoad[id] === true);
+          current = id; loaded[id] = early; opening = false; if (id != null) { opened[id] = 1; delete seenLoad[id]; }
+          if (readyOn && id != null && !early) startReady(id);
+          return { id: id, status: early ? 'complete' : 'loading' };
         }, function (e) { opening = false; throw e; });
       });
     },
@@ -110,7 +117,7 @@ function createWebTabs(plugin, o) {
     executeScript: function (spec) {
       var func = spec && spec.func, args = (spec && spec.args) || [], tabId = spec && spec.target && spec.target.tabId;
       if (typeof func !== 'function') return Promise.reject(new Error('func missing'));
-      var cid = 'c' + (++seq);
+      var cid = 'c' + inst + '_' + (++seq); // S23-13: the prefix keeps the answers of two WebTabs objects apart
       var code = '(async function () {\n' +
         'var C = ' + JSON.stringify(cid) + ';\n' +
         'function send(o) { try { window.mobileApp.postMessage({ detail: o }); } catch (e) {} }\n' +
@@ -144,7 +151,7 @@ function createWebTabs(plugin, o) {
     failPending(null, 'closed'); Object.keys(readyStops).forEach(stopReady);
     Object.keys(opened).forEach(function (k) { try { Promise.resolve(plugin.close({ id: k })).catch(function () {}); } catch (_) {} }); opened = {}; // S14-1d: no page is left open after a run
     unsubs.forEach(function (u) { try { if (typeof u === 'function') u(); } catch (_) {} });
-    unsubs = []; inited = null; listeners = [];
+    unsubs = []; inited = null; listeners = []; seenLoad = {};
   }
   return { tabs: tabs, scripting: scripting, dispose: dispose, lastProbe: function () { return lastProbe; }, earlyCount: function () { return Object.keys(earlyIds).length; } };
 }

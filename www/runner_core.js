@@ -80,7 +80,16 @@
     return Math.max(min, Math.min(perStore, left));
   }
   // d = what the plain fetch saw (fetchread.js last[key]). True only for a normal page with zero cards.
-  function emptyPageIsNoResults(d) { return !!d && d.http === 200 && d.cards === 0 && d.robot === false && typeof d.bytes === 'number' && d.bytes >= 1000; }
+  // S23-13 (D-158): AND the page said it itself (d.nr === true, set by fetchread.js). A blank 200 page (what Amazon gave in the 2nd Full Test) is NOT "no results": it goes to the tab as before S23-11a.
+  function emptyPageIsNoResults(d) { return !!d && d.http === 200 && d.cards === 0 && d.robot === false && d.nr === true && typeof d.bytes === 'number' && d.bytes >= 1000; }
+  // S23-13 (D-158): a pool of tab slots. One pool can be shared by several runAll calls and by single reads (slots.run), so the number of open pages at once stays at n.
+  function makeSlots(n) {
+    var max = n > 0 ? n : Infinity, active = 0, waiting = [];
+    function acquire(prio) { if (max === Infinity) return Promise.resolve(); return new Promise(function (res) { if (active < max) { active++; res(); } else { waiting.push({ p: prio == null ? 1 : prio, res: res }); waiting.sort(function (a, b) { return a.p - b.p; }); } }); }
+    function release() { if (max === Infinity) return; active--; var w = waiting.shift(); if (w) { active++; w.res(); } }
+    function run(prio, fn) { return acquire(prio).then(function () { return fn(); }).then(function (r) { release(); return r; }, function (e) { release(); throw e; }); }
+    return { acquire: acquire, release: release, run: run, active: function () { return active; } };
+  }
   async function runAll(api, o) {
     var query = String((o && o.query) || '').trim();
     if (!query) throw new Error('empty query');
@@ -101,10 +110,8 @@
     // S12-12 (D-075): optional hybrid. A store listed in o.fetchFirst is read by ONE plain request (o.fetchRead, no tab). If that gives no cards, fails or is slow,
     // the same store is read by a tab exactly as before. o.maxTabs limits how many tabs are open at the same time (default: no limit, as before).
     var fetchSet = {}; (o.fetchFirst || []).forEach(function (k) { fetchSet[k] = 1; });
-    var useFetch = typeof o.fetchRead === 'function', maxTabs = o.maxTabs > 0 ? o.maxTabs : Infinity, activeTabs = 0, waiting = [];
+    var useFetch = typeof o.fetchRead === 'function', slots = o.slots || makeSlots(o.maxTabs > 0 ? o.maxTabs : Infinity), acquire = slots.acquire, release = slots.release;
     // S23-9b (D-143): waiting tab jobs have a priority. A store whose plain fetch failed (it is likely readable) goes before stores that only have a tab (priority 0 before 1); same priority keeps the order of arrival.
-    function acquire(prio) { if (maxTabs === Infinity) return Promise.resolve(); return new Promise(function (res) { if (activeTabs < maxTabs) { activeTabs++; res(); } else { waiting.push({ p: prio == null ? 1 : prio, res: res }); waiting.sort(function (a, b) { return a.p - b.p; }); } }); }
-    function release() { if (maxTabs === Infinity) return; activeTabs--; var w = waiting.shift(); if (w) { activeTabs++; w.res(); } }
     function tabJob(store, extra, prio) {
       return acquire(prio).then(function () { var cap = budgetFor(perStore, o.deadlineAt, Date.now(), o.minTabMs, o.tailMs); if (cap === 0) return { store: store.label, key: store.key, state: 'skipped', stage: 'waiting', ms: 0 }; /* S23-6c: after the deadline no new store tab is opened; S23-11 (D-155): also not in the last seconds before it */ return guarded(store, cap); }).then(function (r) { release(); if (extra) Object.assign(r, extra); return r; }, function (e) { release(); throw e; });
     }
@@ -167,6 +174,6 @@
     };
   }
 
-  var api = { STORES: STORES, runAll: runAll, runStore: runStore, waitLoad: waitLoad, budgetFor: budgetFor, emptyPageIsNoResults: emptyPageIsNoResults };
+  var api = { STORES: STORES, runAll: runAll, runStore: runStore, waitLoad: waitLoad, budgetFor: budgetFor, emptyPageIsNoResults: emptyPageIsNoResults, makeSlots: makeSlots };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.SmartSetuRunner = api;
 })(typeof globalThis !== 'undefined' ? globalThis : self);

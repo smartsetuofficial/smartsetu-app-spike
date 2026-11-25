@@ -66,11 +66,11 @@ R.runAll(api, { query: 'x', collect: function () {}, enabled: {}, deadlineAt: Da
 
 function wiring() {
   var app = fs.readFileSync(path.join(__dirname, 'src', 'app.js'), 'utf8');
-  ck('5a time cap values in one line: 20 s per store, 30 s gate', /STORE_MS = 20000, GATE_MS = 30000/.test(app) && /perStoreMs: STORE_MS, deadlineAt: live\.t0 \+ GATE_MS/.test(app), 0);
+  ck('5a time cap values in one line: 20 s per store, 50 s gate, 2 slots (S23-13)', /STORE_MS = 20000, GATE_MS = 50000, MAX_TABS = 2/.test(app) && /perStoreMs: STORE_MS, deadlineAt: live\.t0 \+ GATE_MS/.test(app), 0);
   ck('5b the old 100 s late gate and the 50 s store budget are gone', !/> 100000/.test(app) && !/perStoreMs: 50000/.test(app), 0);
-  ck('5c Myntra, Croma and the second try are gated by late()', /pl\.enabled\.Myntra && late\(\)/.test(app) && /pl\.enabled\.Croma && late\(\)/.test(app) && /var bad = late\(\) \? \[\]/.test(app), 0);
+  ck('5c Myntra, Croma and the second try are gated by late()', /if \(late\(\)\) \{ var ms0 = skipRun\('Myntra'\)/.test(app) && /if \(late\(\)\) \{ var cs0 = skipRun\('Croma'\)/.test(app) && /var bad = late\(\) \? \[\]/.test(app), 0);
   ck('5d report line has every store (state, stage, seconds, fallback)', /lastStores = \(out\.runs/.test(app) && /STORES /.test(app) && /storesDiag\(\)/.test(app), 0);
-  ck('5e version 0.10.26', /VERSION = '0\.10\.26'/.test(app) && JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version === '0.10.26', 0);
+  ck('5e version 0.10.27', /VERSION = '0\.10\.27'/.test(app) && JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version === '0.10.27', 0);
   ck('5f paintRelevance passes the close count', /U\.closeByStore\(res\)/.test(app) && /U\.relevanceLine\(rel\[run\.key\], cls\[run\.key\] \|\| 0\)/.test(app), 0);
   console.log('test_s23_6c: ' + pass + ' pass, ' + fail + ' fail'); process.exit(fail ? 1 : 0);
 }

@@ -14,7 +14,7 @@ var Car = require('./carousel.js'); // S22g: Why SmartSetu cards slide one by on
 var AIF = require('./aiflow.js'); // S23-2c (D-132): glue to the AI Worker (query meaning + accessory labels), tested in Node with a fake worker
 var OF = require('./offerflow.js').make({ parser: SmartSetu.parser, adapter: SmartSetu.adapter, offers: SmartSetu.offers, isTileLine: W.isTileLine }); // S22b-2: offers under result rows (D-117)
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.26';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.27';
 var cards = [], offerRaw = {}, offerTok = 0, lastView = null; // member's own cards (phone only), offer lines read from product pages (by listing url), run token, last drawn view
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = {};
@@ -23,7 +23,7 @@ var PAUSED = {};
 var AI_URL = 'https://smartsetu-ai.smartsetuofficial.workers.dev', aiLast = null, aiLabels = null; // aiLabels = { isA } hook for the engine while a search that used the AI is on screen
 var AIX = AIF.make({ url: AI_URL, post: function (u, body, ms) { return Promise.resolve(CapacitorHttp.post({ url: u, headers: { 'Content-Type': 'application/json' }, data: body, connectTimeout: ms, readTimeout: ms })).then(function (r) { if (!r || r.status !== 200) throw new Error('http ' + (r && r.status)); var d = r.data; return typeof d === 'string' ? JSON.parse(d) : d; }); } });
 var lastStores = null; // S23-6c: state, stage and seconds of every store of the last normal Compare (for the owner-only report)
-var STORE_MS = 20000, GATE_MS = 30000; // S23-6c time cap (first values, NOT measured on the phone): a store gets 20 s, no new store tab and no extra try after 30 s
+var STORE_MS = 20000, GATE_MS = 50000, MAX_TABS = 2; // S23-6c time cap, S23-13 (D-158) values (NOT measured on the phone): a store gets 20 s, no new store tab and no extra try after 50 s (30 s skipped Myntra, Ajio, Meesho, Croma in the 2nd Full Test); at most MAX_TABS hidden pages open at once (V-599: the plugin supports several)
 function storesDiag() { try { return lastStores ? ' | STORES ' + JSON.stringify(lastStores) : ' | STORES none yet'; } catch (e) { return ''; } }
 function aiDiag() { // one plain line for the owner-only store test report (devtest.js)
   try { return (aiLast ? JSON.stringify({ last: aiLast, state: AIX.state() }) : (AIX.on() ? 'no AI check ran yet (do a normal Compare first)' : 'AI is off (this build has no Worker address)')) + storesDiag(); } catch (e) { return 'unreadable'; }
@@ -236,6 +236,7 @@ async function startRun(q, only) {
   var fbPrio = {}; try { var rkk = M.rank(q, R.STORES); Object.keys(rkk).forEach(function (k) { fbPrio[k] = rkk[k] === 1 ? 3 : 0; }); } catch (_) { fbPrio = {}; } // S23-11 (D-155): a fetch store that does not usually sell this search gets its fallback tab after the likely stores
   var fr = SmartSetuFetchRead.make(NF.makeFetch(CapacitorHttp, C.desktopUa(navigator.userAgent)), SmartSetuSnapDoc.snapFromHtml);
   function late() { return Date.now() - live.t0 > GATE_MS; }
+  var slots = R.makeSlots(MAX_TABS); // S23-13 (D-158): one pool of hidden pages for the whole search (first pass, Myntra and Croma, deferred stores)
   try {
     live.q = q; live.t0 = Date.now(); live.scrolled = extra; live.firstAt = 0;
     if (!extra) { live.runs = {}; skeleton(); $('morebox').hidden = true; initProgress(pl); }
@@ -254,36 +255,34 @@ async function startRun(q, only) {
         if (aq) { q = aq; live.q = aq; live.aiSearch = aiR.search; aiLabels = { isA: AIX.isAFor(aiR.search), isP: AIX.isPFor(aiR.search) }; } // S23-5: the first draw already asks the engine which cards it could not confirm (aiInfo.unsure); labels of the same phrase from memory apply at once
       }
     }
-    function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { if (gen !== runGen) return; updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, maxTabs: 1, fallbackPrio: fbPrio, perStoreMs: STORE_MS, deadlineAt: live.t0 + GATE_MS, retryTimeouts: false }; }
+    function opts(enabled) { return { query: q, enabled: enabled, foreground: false, rereads: 2, rereadMs: 2500, collect: smartsetuCollect, onUpdate: function (r) { if (gen !== runGen) return; updateProgress(r); adopt([r]); if (r.snapshot) liveRender(); }, slots: slots, fallbackPrio: fbPrio, perStoreMs: STORE_MS, deadlineAt: live.t0 + GATE_MS, retryTimeouts: false }; }
     var pass1 = Object.assign({}, pl.enabled); pass1.Myntra = false; pass1.Croma = false; var ord = M.order(q, R.STORES, pl.enabled, SmartSetuFetchRead.STORES_OK, ['myntra', 'croma']); ord.defer.forEach(function (l) { pass1[l] = false; }); /* S23-10e (D-150): tab stores that do not usually sell this kind of product wait until the likely stores are done; none is dropped */ // S20b: Myntra is read on its own after the others (card rescue, below), it does not hold up the rest
     var o1 = opts(pass1); o1.fetchFirst = SmartSetuFetchRead.STORES_OK; o1.fetchRead = fr; o1.fetchMs = 9000; o1.fetchDiag = function (s) { return fr.last && fr.last[s.key] ? JSON.parse(JSON.stringify(fr.last[s.key])) : null; };
+    // S23-13 (D-158): Myntra and Croma start at once on their own slot with their own page identity (they were read last and the time gate skipped them: 11 of 11 and 4 of 11 in the 2nd Full Test). Results are kept here and put into out after the other stages.
+    var hiRuns = [];
+    function skipRun(label) { var st = storeOf(label); return { store: st.label, key: st.key, state: 'skipped', stage: 'waiting', ms: 0 }; }
+    async function stepMyntra() {
+      if (!pl.enabled.Myntra) return;
+      if (late()) { var ms0 = skipRun('Myntra'); hiRuns.push(ms0); updateProgress(ms0); adopt([ms0]); return; }
+      tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
+      var mr = await W.rescueRead(tabs2, storeOf('Myntra'), q, {});
+      if (gen !== runGen) return;
+      hiRuns.push(mr); updateProgress(mr); adopt([mr]); liveRender();
+    }
+    async function stepCroma() {
+      if (!pl.enabled.Croma) return;
+      if (late()) { var cs0 = skipRun('Croma'); hiRuns.push(cs0); updateProgress(cs0); adopt([cs0]); return; }
+      tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent)); // S21e: Croma needs a pincode before it shows products; the app types a fixed one (owner: the listing does not change), see W.pincodeSet
+      var cr = await W.pinRead(tabs2, storeOf('Croma'), q, W.CROMA_PIN, {});
+      if (gen !== runGen) return;
+      hiRuns.push(cr); updateProgress(cr); adopt([cr]); liveRender();
+    }
+    var stepOf = { Myntra: stepMyntra, Croma: stepCroma };
+    var hiDone = (async function () { var seq = ord.hi.concat(ord.lo); for (var si = 0; si < seq.length; si++) { await slots.run(si < ord.hi.length ? 1 : 4, stepOf[seq[si]]); if (gen !== runGen) return; } })().catch(function () {});
     tabs = mkTabs();
     out = await runStores(tabs, o1);
     if (gen !== runGen) return;
     adopt(out.runs);
-    function skipRun(label) { var st = storeOf(label); return { store: st.label, key: st.key, state: 'skipped', stage: 'waiting', ms: 0 }; }
-    async function stepMyntra() {
-      if (pl.enabled.Myntra && late()) { var ms0 = skipRun('Myntra'); W.mergeRuns(out, { runs: [ms0] }); ms0.retried = false; updateProgress(ms0); adopt([ms0]); }
-      else if (pl.enabled.Myntra) {
-        say('Checking Myntra...');
-        tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
-        var mr = await W.rescueRead(tabs2, storeOf('Myntra'), q, {});
-        if (gen !== runGen) return;
-        W.mergeRuns(out, { runs: [mr] }); updateProgress(mr); adopt([mr]); liveRender();
-      }
-    }
-    async function stepCroma() {
-      if (pl.enabled.Croma && late()) { var cs0 = skipRun('Croma'); W.mergeRuns(out, { runs: [cs0] }); cs0.retried = false; updateProgress(cs0); adopt([cs0]); }
-      else if (pl.enabled.Croma) { // S21e: Croma needs a pincode before it shows products; the app types a fixed one (owner: the listing does not change), see W.pincodeSet
-        say('Checking Croma...');
-        tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
-        var cr = await W.pinRead(tabs2, storeOf('Croma'), q, W.CROMA_PIN, {});
-        if (gen !== runGen) return;
-        W.mergeRuns(out, { runs: [cr] }); updateProgress(cr); adopt([cr]); liveRender();
-      }
-    }
-    var stepOf = { Myntra: stepMyntra, Croma: stepCroma };
-    for (var hi = 0; hi < ord.hi.length; hi++) { await stepOf[ord.hi[hi]](); if (gen !== runGen) return; }
     if (ord.defer.length) { // S23-10e: the deferred tab stores, same kind of tab as the first pass (no desktop user agent)
       if (late()) { ord.defer.forEach(function (l) { var r0 = skipRun(l); W.mergeRuns(out, { runs: [r0] }); r0.retried = false; updateProgress(r0); adopt([r0]); }); }
       else {
@@ -295,7 +294,8 @@ async function startRun(q, only) {
         adopt(out.runs); liveRender();
       }
     }
-    for (var lo = 0; lo < ord.lo.length; lo++) { await stepOf[ord.lo[lo]](); if (gen !== runGen) return; }
+    await hiDone; if (gen !== runGen) return; // S23-13: Myntra and Croma ran beside the other stages
+    if (hiRuns.length) { W.mergeRuns(out, { runs: hiRuns }); hiRuns.forEach(function (r) { if (r.state === 'skipped') r.retried = false; }); }
     var notMyntra = function (l) { return l !== 'Myntra' && l !== 'Croma'; };
     var bad = late() ? [] : W.failingLabels(out.runs).filter(notMyntra); // S23-6c: no second try after the time gate
     if (bad.length) {

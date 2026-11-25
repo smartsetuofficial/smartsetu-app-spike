@@ -16,7 +16,7 @@ var FK = ['amazon', 'flipkart', 'nykaa', 'reliancedigital'];
 function O(x) { var o = { query: 'red tape shoes', collect: function () {}, settleMs: 0, loadMs: 60, fetchFirst: FK, maxTabs: 1, fetchMs: 80, fetchRetryWaitMs: 5, enabled: { Myntra: false, Croma: false } }; Object.keys(x || {}).forEach(function (k) { o[k] = x[k]; }); return o; }
 function snap(store, q) { return { cards: [{ link: store.url(q) }], url: store.url(q), kind: 'search' }; }
 function reader(emptyKeys) { return function (store, q) { return Promise.resolve(emptyKeys.indexOf(store.key) >= 0 ? { cards: [] } : snap(store, q)); }; }
-var NORMAL = { http: 200, bytes: 90000, head: 'Search results', robot: false, cards: 0 };
+var NORMAL = { http: 200, bytes: 90000, head: 'Search results', robot: false, cards: 0, nr: true }; // S23-13 (D-158): nr = the page itself said there are no results
 (async function () {
   // 1 pure helpers
   var now = 1000000;
@@ -25,7 +25,7 @@ var NORMAL = { http: 200, bytes: 90000, head: 'Search results', robot: false, ca
   ck('1c 25 s left: the cap 20 s', R.budgetFor(20000, now + 25000, now) === 20000);
   ck('1d 8 s left: 8 s (at least 6 s)', R.budgetFor(20000, now + 8000, now) === 8000);
   ck('1e less than 6 s left or the deadline passed: no new tab', R.budgetFor(20000, now + 5000, now) === 0 && R.budgetFor(20000, now - 1, now) === 0);
-  ck('1f emptyPageIsNoResults: only a normal 200 page with 0 cards', R.emptyPageIsNoResults(NORMAL) === true && !R.emptyPageIsNoResults({ http: 403, bytes: 900, robot: true, cards: null }) && !R.emptyPageIsNoResults({ http: 200, bytes: 90000, robot: true, cards: 0 }) && !R.emptyPageIsNoResults({ http: 200, bytes: 400, robot: false, cards: 0 }) && !R.emptyPageIsNoResults({ http: 200, bytes: 90000, robot: false, cards: null }) && !R.emptyPageIsNoResults({ http: null, bytes: null, robot: false, cards: null }) && !R.emptyPageIsNoResults(null));
+  ck('1f emptyPageIsNoResults: only a normal 200 page with 0 cards that says no results', R.emptyPageIsNoResults(NORMAL) === true && !R.emptyPageIsNoResults(Object.assign({}, NORMAL, { nr: false })) && !R.emptyPageIsNoResults({ http: 200, bytes: 90000, head: 'x', robot: false, cards: 0 }) && !R.emptyPageIsNoResults({ http: 403, bytes: 900, robot: true, cards: null }) && !R.emptyPageIsNoResults({ http: 200, bytes: 90000, robot: true, cards: 0 }) && !R.emptyPageIsNoResults({ http: 200, bytes: 400, robot: false, cards: 0 }) && !R.emptyPageIsNoResults({ http: 200, bytes: 90000, robot: false, cards: null }) && !R.emptyPageIsNoResults({ http: null, bytes: null, robot: false, cards: null }) && !R.emptyPageIsNoResults(null));
   // 2 a normal empty page: no tab, state no_cards with noResults
   var api = mockApi(), out = await R.runAll(api, O({ fetchRead: reader(['reliancedigital']), fetchDiag: function () { return Object.assign({}, NORMAL); } }));
   var by = {}; out.runs.forEach(function (r) { by[r.key] = r; });
