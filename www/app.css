@@ -393,7 +393,7 @@ html.fitwrap .motto{font-size:calc(0.5625rem*var(--fitk,1))}
 html.fitwrap .tag{font-size:calc(0.625rem*var(--fitk,1))}
 /* S23-9 (D-142): logo row fit measured by fitguard.js (class hdrfit with --hk, or hdrwrap as last resort). */
 html.hdrfit .top .wrap{flex-wrap:nowrap}
-html.hdrfit .mark{width:calc(3.125rem*var(--hk,1));height:calc(3.125rem*var(--hk,1))}
+html.hdrfit .mark{width:calc(3.125rem*max(var(--hk,1),0.9));height:calc(3.125rem*max(var(--hk,1),0.9))} /* S23-15: the logo picture never shrinks below 90 percent, the texts shrink instead */
 html.hdrfit .brand{font-size:calc(1.375rem*var(--hk,1))}
 html.hdrfit .motto{font-size:calc(0.5625rem*var(--hk,1))}
 html.hdrfit .tag{font-size:calc(0.625rem*var(--hk,1));padding:calc(0.3125rem*var(--hk,1)) calc(0.625rem*var(--hk,1))}
@@ -430,3 +430,20 @@ html.idlehome body{display:flex;flex-direction:column;min-height:100vh;min-heigh
 html.idlehome .foot{margin-top:auto;min-height:0;padding-bottom:calc(var(--sab) + 2.6rem)}
 html.hgrow .perks li{min-height:var(--hg)}
 html.hfit .perks{padding-bottom:max(calc(2.5rem*var(--hf,1)),1.7rem)}
+
+/* ===== S23-15 (D-160): fluid home. The bottom keeps room for the system bar (navres), what is left over goes to the Why card and the gaps (hgrow, hx), the eyebrow picture and the Why card picture are never squeezed. Steps and growth are set by fitguard.js only when measured. ===== */
+html.navres .foot{padding-bottom:calc(var(--sab) + var(--navres,0px) + 1rem)}
+.eyebrow svg{flex:none}
+html.ol-ld .hero .lead{white-space:nowrap;font-size:calc(0.6875rem*var(--o-ld,1))}
+html.hfit.hfrow .perks li{min-height:5.6rem}
+html.hftry .try,html.hftry .pdots{display:none}
+html.hgrow.hfrow .perks .pic{width:min(calc(var(--hg) - 2.2rem),8rem);height:min(calc(var(--hg) - 2.2rem),8rem)}
+html.hx .hero{padding-top:calc(0.875rem*var(--hf,1) + var(--hx,0px))}
+html.hx .eyebrow{margin-bottom:calc(0.625rem*var(--hf,1) + var(--hx,0px))}
+html.hx .hero .lead{margin-top:calc(1rem*var(--hf,1) + var(--hx,0px))}
+html.hx .cardsrow{margin-top:calc(0.75rem*var(--hf,1) + var(--hx,0px))}
+html.hx .try{margin-top:calc(1.125rem*var(--hf,1) + var(--hx,0px))}
+html.hx .privacy{margin-top:calc(0.6875rem*var(--hf,1) + var(--hx,0px))}
+html.hx .perks{padding-top:calc(0.625rem + var(--hx,0px))}
+html.navres .msg:empty{min-height:0;margin-top:0}
+html.navres main.wrap{padding-top:0;padding-bottom:0}

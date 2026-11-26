@@ -29,9 +29,17 @@ function titleKey(t) { return String(t || '').toLowerCase().replace(/[^a-z0-9]+/
 function oneLine(x, n) { return String(x == null ? '' : x).replace(/\s+/g, ' ').slice(0, n); }
 
 // One store of one search -> small numbers. snapshot is dropped afterwards (108 snapshots would not fit in phone memory).
-function analyseRun(run, parse, item) {
+function analyseRun(run, parse, item, maxPrice) {
   var o = { parsed: 0, priced: 0, linked: 0, dups: 0, on: 0, off: 0, readCards: 0, parseError: null };
   try { o.readCards = run && run.snapshot && run.snapshot.cards ? run.snapshot.cards.length : 0; } catch (_) { /* counted as 0 */ }
+  // S23-16 (D-161, item D): what a TAB page was (final path, title, cards read, ready state, links) for a store that gave no listings, so the cause is read in numbers, not guessed (Tata CLiQ 3 and Croma 1 no_cards in the 0.10.27 report)
+  try {
+    if (run && run.snapshot && (run.state !== 'ok' || !o.readCards)) {
+      var sp = ''; try { sp = new URL(run.snapshot.url).pathname.slice(0, 50); } catch (_) { sp = '?'; }
+      var dg2 = run.diag ? ' | ready ' + run.diag.readyState + ' | ' + run.diag.visibility + ' | links ' + run.diag.links : '';
+      o.pg = 'path ' + sp + ' | title ' + oneLine(run.snapshot.title, 70) + ' | cards ' + o.readCards + dg2;
+    }
+  } catch (_) { /* report only */ }
   if (!run || !run.snapshot) return o;
   var p = null;
   try { p = parse(run.snapshot) || {}; } catch (e) { o.parseError = oneLine(e && e.message, 60); return o; }
@@ -43,6 +51,12 @@ function analyseRun(run, parse, item) {
     var k = titleKey(c.title); if (k) { if (seen[k]) o.dups++; else seen[k] = 1; }
     if (re) { if (re.test(' ' + String(c.title || '').toLowerCase() + ' ')) o.on++; else o.off++; }
   });
+  // S23-16 (D-161, item C): the 3 cheapest parsed listings and how many are at or under the AI max price, printed only for a search with 0 result rows
+  try {
+    var pc = (p.cards || []).filter(function (c) { return c.priceNow != null && isFinite(c.priceNow) && c.priceNow > 0; }).sort(function (a, b) { return a.priceNow - b.priceNow; });
+    o.cheap3 = pc.slice(0, 3).map(function (c) { return c.priceNow + ' ' + oneLine(c.title, 50); });
+    o.under = maxPrice > 0 ? pc.filter(function (c) { return c.priceNow <= maxPrice; }).length : null;
+  } catch (_) { /* report only */ }
   // S23-11b (D-156, item 7): a search where this store repeats titles above the limit keeps 2 repeated titles and about 700 characters of ONE raw card, so the cause can be read in the report (no guess fix before that)
   try {
     if (o.parsed > 0 && o.dups * 100 / o.parsed > LIMITS.repeat) {
@@ -60,17 +74,18 @@ function analyseRun(run, parse, item) {
 // One finished search (the object env.run gave back) -> the small record the report keeps.
 function summarise(item, one, parse) {
   var lines = (one && one.stores) || [], byLabel = {}, order = [];
-  lines.forEach(function (l) { if (l && l.s && !byLabel[l.s]) { byLabel[l.s] = { label: l.s, state: l.st, nr: l.nr ? 1 : 0, stage: l.g || null, ms: l.ms == null ? null : l.ms, n: l.n == null ? null : l.n, via: l.via || null, fb: l.fb || null, ft: l.ft || null, fd: l.fd ? oneLine(JSON.stringify(l.fd), 220) : null, fd1: l.fd1 ? oneLine(JSON.stringify(l.fd1), 220) : null }; order.push(l.s); } });
+  var mp = one && one.ai && one.ai.rewrite && Number(one.ai.rewrite.max_price) > 0 ? Number(one.ai.rewrite.max_price) : null; // S23-16 (D-161)
+  lines.forEach(function (l) { if (l && l.s && !byLabel[l.s]) { byLabel[l.s] = { label: l.s, state: l.st, nr: l.nr ? 1 : 0, stage: l.g || null, ms: l.ms == null ? null : l.ms, n: l.n == null ? null : l.n, via: l.via || null, fb: l.fb || null, ft: l.ft || null, fd: l.fd ? oneLine(JSON.stringify(l.fd), 420) : null, fd1: l.fd1 ? oneLine(JSON.stringify(l.fd1), 420) : null }; order.push(l.s); } });
   ((one && one.runs) || []).forEach(function (r) {
     if (!r || !r.store) return;
     if (!byLabel[r.store]) { byLabel[r.store] = { label: r.store, state: r.state, stage: null, ms: null, n: null }; order.push(r.store); }
-    var a = analyseRun(r, parse, item), s = byLabel[r.store];
+    var a = analyseRun(r, parse, item, mp), s = byLabel[r.store];
     Object.keys(a).forEach(function (k) { s[k] = a[k]; });
     if (s.n == null) s.n = a.readCards;
   });
   var stores = order.map(function (l) { var s = byLabel[l]; ['parsed', 'priced', 'linked', 'dups', 'on', 'off'].forEach(function (k) { if (s[k] == null) s[k] = 0; }); return s; });
   var ai = one && one.ai ? { rewrite: one.ai.rewrite || null, refine: one.ai.refine || null } : null;
-  return { item: item, ms: one && one.ms != null ? one.ms : null, error: one && one.error ? oneLine(one.error, 120) : null, ai: ai, rows: ((one && one.rows) || []).slice(0, 6).map(function (r) { return { store: r.store, price: r.price, title: oneLine(r.title, 70) }; }), rowCount: ((one && one.rows) || []).length, stores: stores };
+  return { item: item, maxPrice: mp, ms: one && one.ms != null ? one.ms : null, error: one && one.error ? oneLine(one.error, 120) : null, ai: ai, rows: ((one && one.rows) || []).slice(0, 6).map(function (r) { return { store: r.store, price: r.price, title: oneLine(r.title, 70) }; }), rowCount: ((one && one.rows) || []).length, stores: stores };
 }
 
 // Part 1: per store over all searches. Verdict is FAIL / WARN / PASS with the reasons in words.
@@ -111,9 +126,16 @@ function gate(sums) {
   });
 }
 
+// S23-15 (D-160): the home screen in numbers (window height, page height, safe area, classes, card height, logo size), from fitguard.js
+function homeLine(p) {
+  try {
+    var h = p.home || (typeof window !== 'undefined' && typeof window.smartsetuHomeDiag === 'function' ? window.smartsetuHomeDiag() : null);
+    return h ? oneLine(JSON.stringify(h), 600) : 'not available';
+  } catch (e) { return 'not available'; }
+}
 function buildReport(p) {
   var sums = p.sums || [], total = (p.queries || QUERIES).length, g = gate(sums), aiOn = sums.filter(function (s) { return s.item.ai; }).length;
-  var L = ['SmartSetu FULL TEST MODE report (test build ' + (p.version || '?') + ')', 'Searches done: ' + sums.length + ' of ' + total + (p.partial ? ' (PARTIAL, the run is still going or was stopped)' : '') + ' | AI allowed on ' + aiOn + ' | Total: ' + (p.totalS == null ? '?' : p.totalS) + ' s | Seen at: ' + (p.seenAt || ''), 'Browser: ' + (p.ua || '?'),
+  var L = ['SmartSetu FULL TEST MODE report (test build ' + (p.version || '?') + ')', 'Searches done: ' + sums.length + ' of ' + total + (p.partial ? ' (PARTIAL, the run is still going or was stopped)' : '') + ' | AI allowed on ' + aiOn + ' | Total: ' + (p.totalS == null ? '?' : p.totalS) + ' s | Seen at: ' + (p.seenAt || ''), 'Browser: ' + (p.ua || '?'), 'HOME: ' + homeLine(p),
     'Gate limits are first values, NOT measured on a phone: price >= ' + LIMITS.price + '%, links >= ' + LIMITS.link + '%, repeated titles <= ' + LIMITS.repeat + '%, off-topic <= ' + LIMITS.off + '%, stores with listings >= ' + LIMITS.productive + '% of searches. Off-topic = the title has none of the words chosen for that search (a rough check).',
     '', 'PART 1: STORE QUALITY GATE (all searches except the nonsense one)'];
   if (!g.length) L.push('- (no search finished yet)');
@@ -128,9 +150,14 @@ function buildReport(p) {
     if (s.ai && s.ai.refine) L.push('AI refine: ' + oneLine(JSON.stringify(s.ai.refine), 200));
     s.stores.forEach(function (st) { L.push('- ' + st.label + ' | ' + (st.nr ? 'no_results' : st.state) + ' | ' + (st.n == null ? '-' : st.n) + ' | ' + st.parsed + ' | ' + st.priced + ' | ' + secs(st.ms) + (st.stage ? ' | ' + st.stage : '') + (st.parseError ? ' | parse error ' + st.parseError : '')); // S23-11b (D-156, item 6): why a store went to a tab and what the plain fetch saw
       if (st.fb) L.push('    fetch fallback: ' + st.fb + ' | tries ' + (st.ft == null ? '-' : st.ft) + ' | fetch saw ' + (st.fd || '-') + (st.fd1 ? ' | first try saw ' + st.fd1 : '') + ' | finished via ' + (st.via || 'tab'));
+      if (st.pg) L.push('    page saw: ' + st.pg);
     });
     s.rows.forEach(function (r) { L.push('  row: ' + r.store + ' | ' + (r.price || '-') + ' | ' + r.title); });
     if (!s.rows.length) L.push('  row: (none)');
+    if (!s.rows.length && !it.nores) { // S23-16 (D-161, item C): why a search with listings shows 0 rows
+      L.push('  WHY 0 ROWS: search words "' + it.q + '" | max price ' + (s.maxPrice == null ? 'none' : s.maxPrice) + ' | per store: parsed | on-topic by the word list | at or under the max price | 3 cheapest');
+      s.stores.forEach(function (st) { if (st.parsed > 0) L.push('    - ' + st.label + ' | ' + st.parsed + ' | ' + st.on + ' | ' + (st.under == null ? '-' : st.under) + ' | ' + ((st.cheap3 || []).join(' ;; ') || '-')); });
+    }
   });
   var rp = []; // S23-11b (D-156, item 7): first search per store that had repeated titles above the limit
   var seenRp = {};

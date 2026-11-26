@@ -67,7 +67,25 @@
     if (inp.getAttribute('placeholder') !== pick) inp.setAttribute('placeholder', pick);
   }
   /* S23-12 (D-157): the idle home screen (no results, no progress, no card panel) must show everything from the logo to the slogan on one screen, on any phone height. Steps from the least to the most visible change, each tested by measuring the real page height: (1) gaps, card height and footer space shrink by a ratio, (2) the 'Why SmartSetu' card turns into a compact row, (3) the privacy note (it is also a slide) is hidden, (4) the lead line is hidden. Heading, logo, search and Compare button are never made smaller by this step. Not applied in landscape or while the keyboard is open. No storage, no network. */
-  var HF_CLS = ['hfit', 'hfrow', 'hfpriv', 'hflead'];
+  var HF_CLS = ['hfit', 'hfrow', 'hfpriv', 'hftry', 'hflead'];
+  /* S23-15 (D-160): every measurement starts from the plain page. Classes and variables of the last measurement never stay behind (they spoiled the next one). */
+  var VCLS = HF_CLS.concat(['hgrow', 'hx', 'idlehome', 'navres']), VVARS = ['--hf', '--hft', '--hg', '--hx', '--navres'];
+  function resetVertical() {
+    VCLS.forEach(function (c) { root.classList.remove(c); });
+    VVARS.forEach(function (v) { root.style.removeProperty(v); });
+  }
+  /* The bottom safe area as the page really gets it (px). Some phones with the 3 button bar report 0 although the page runs under the bar. */
+  function sabPx() {
+    try { return sabPx1(); } catch (e) { return 0; }
+  }
+  function sabPx1() {
+    var p = document.createElement('div');
+    p.style.cssText = 'position:absolute;left:0;top:0;width:1px;height:0;visibility:hidden;padding-bottom:var(--sab,0px)';
+    document.body.appendChild(p);
+    var v = parseFloat(getComputedStyle(p).paddingBottom) || 0;
+    document.body.removeChild(p);
+    return v;
+  }
   function idleHome() {
     var ids = ['progress', 'empty', 'morebox', 'cardspanel'];
     for (var i = 0; i < ids.length; i++) { var n = document.getElementById(ids[i]); if (n && !n.hidden) return false; }
@@ -75,19 +93,20 @@
     return !(r && r.firstChild);
   }
   function fitHeight() {
+    resetVertical();
     try { fitHeightCore(); } catch (e) { /* never block the app */ }
     try { fitGrow(); } catch (e) { /* never block the app */ }
   }
+  /* S23-15 (D-160): the slogan must stay above the system bar. The page keeps at least 52 px (or the reported safe area, if larger) free under the slogan; the steps then only have to fit what is left. Steps from the least to the most: smaller Why cards, one compact row per card, privacy note hidden, Why heading and dots hidden, lead hidden. */
   function fitHeightCore() {
-    HF_CLS.forEach(function (c) { root.classList.remove(c); });
-    root.style.removeProperty('--hf'); root.style.removeProperty('--hft');
     var vh = window.innerHeight, vw = window.innerWidth;
     if (!vh || !vw || vw > vh || !idleHome()) return;
     var ae = document.activeElement;
     if (ae && ae.tagName === 'INPUT') { return; }
+    root.style.setProperty('--navres', Math.max(0, Math.round(52 - sabPx())) + 'px'); root.classList.add('navres');
     function over() { return root.scrollHeight - vh; }
     if (over() <= 1) return;
-    var sets = [[['hfit'], 0.76], [['hfit', 'hfrow'], 0.6], [['hfit', 'hfrow', 'hfpriv'], 0.6], [['hfit', 'hfrow', 'hfpriv', 'hflead'], 0.4]];
+    var sets = [[['hfit'], 0.76], [['hfit', 'hfrow'], 0.6], [['hfit', 'hfrow', 'hfpriv'], 0.6], [['hfit', 'hfrow', 'hfpriv', 'hftry'], 0.6], [['hfit', 'hfrow', 'hfpriv', 'hftry', 'hflead'], 0.4]];
     for (var s = 0; s < sets.length; s++) {
       HF_CLS.forEach(function (c) { root.classList.remove(c); });
       sets[s][0].forEach(function (c) { root.classList.add(c); });
@@ -99,7 +118,7 @@
     }
   }
   /* S23-14 (D-159): (a) the eyebrow, the card-offers hint and the slogan stay on ONE line: the text shrinks step by step (measured, never below its minimum); only if even the minimum does not fit does that one text wrap as before. (b) idle home taller than its content: the slogan is pinned to the bottom of the screen (class idlehome) and the Why cards take part of the spare height (class hgrow, --hg), so every phone height looks the same. Nothing changes when the page already fills the screen. No storage, no network. */
-  var OL = [['eb', '.eyebrow', 0.62], ['cs', '.cardsrow .cr-s', 0.7], ['sl', '.slogan', 0.7]];
+  var OL = [['eb', '.eyebrow', 0.55], ['cs', '.cardsrow .cr-s', 0.6], ['ld', '.hero .lead', 0.65], ['sl', '.slogan', 0.62]];
   function fitOneLine() {
     for (var i = 0; i < OL.length; i++) {
       var key = OL[i][0], el = document.querySelector(OL[i][1]);
@@ -116,22 +135,45 @@
       if (!fit1) { root.classList.remove('ol-' + key); root.style.removeProperty('--o-' + key); }
     }
   }
+  /* S23-15 (D-160): what is left over after the steps is given back to the page, not left empty: first the Why card grows (up to a cap, its picture with it), then the gaps between the blocks grow a little (--hx); the slogan is pinned to the bottom (idlehome). Every growth is checked (page never taller than the window) and halved when it does not fit. */
   function fitGrow() {
-    root.classList.remove('idlehome'); root.classList.remove('hgrow'); root.style.removeProperty('--hg');
     var vh = window.innerHeight, vw = window.innerWidth;
     if (!vh || !vw || vw > vh || !idleHome()) return;
     var ae = document.activeElement;
     if (ae && ae.tagName === 'INPUT') return;
     var foot = document.querySelector('.foot'), li = document.querySelector('.perks li');
+    if (!foot || !li) return;
+    function over() { return root.scrollHeight - vh; }
     var spare = vh - foot.getBoundingClientRect().bottom;
-    var cur = li.offsetHeight;
     root.classList.add('idlehome');
-    if (spare < 20) return;
-    var grow = Math.min(Math.floor((spare - 8) * 0.6), 72);
-    if (grow < 8) return;
-    root.style.setProperty('--hg', (cur + grow) + 'px'); root.classList.add('hgrow');
-    if (root.scrollHeight - vh > 1) { root.classList.remove('hgrow'); root.style.removeProperty('--hg'); }
+    if (spare < 6) return;
+    var rem = parseFloat(getComputedStyle(root).fontSize) || 16, row = root.classList.contains('hfrow');
+    var cur = li.offsetHeight, cap = (row ? 11 : 15.5) * rem;
+    var grow = Math.min(Math.floor(spare - 2), Math.max(0, Math.floor(cap - cur)));
+    var used = 0;
+    for (var i = 0; i < 6 && grow >= 6; i++) {
+      root.style.setProperty('--hg', (cur + grow) + 'px'); root.classList.add('hgrow');
+      if (over() <= 1) { used = grow; break; }
+      grow = Math.floor(grow / 2);
+    }
+    if (!used) { root.classList.remove('hgrow'); root.style.removeProperty('--hg'); }
+    var left = spare - used - 2;
+    if (left >= 14) {
+      var hx = Math.min(Math.floor(left / 7), Math.round(1.4 * rem));
+      for (var j = 0; j < 6 && hx >= 2; j++) {
+        root.style.setProperty('--hx', hx + 'px'); root.classList.add('hx');
+        if (over() <= 1) return;
+        hx = Math.floor(hx / 2);
+      }
+      root.classList.remove('hx'); root.style.removeProperty('--hx');
+    }
   }
+  /* S23-15 (D-160): what the Full Test report prints on its HOME line, so that a screen that still looks wrong can be read in numbers. */
+  window.smartsetuHomeDiag = function () {
+    var f = document.querySelector('.foot'), s = document.querySelector('.slogan'), li = document.querySelector('.perks li'), m = document.querySelector('.mark');
+    var vv = window.visualViewport;
+    return { iw: window.innerWidth, ih: window.innerHeight, ch: root.clientHeight, vv: vv ? Math.round(vv.height) : null, sh: root.scrollHeight, sab: Math.round(sabPx()), dpr: window.devicePixelRatio, rem: parseFloat(getComputedStyle(root).fontSize), cls: root.className, foot: f ? Math.round(f.getBoundingClientRect().bottom) : null, slog: s ? Math.round(s.getBoundingClientRect().bottom) : null, card: li ? li.offsetHeight : null, mark: m ? Math.round(m.getBoundingClientRect().width) : null, hg: root.style.getPropertyValue('--hg') || null, hf: root.style.getPropertyValue('--hf') || null, hx: root.style.getPropertyValue('--hx') || null };
+  };
   var hfTimer = 0;
   function hfSoon() { if (hfTimer) clearTimeout(hfTimer); hfTimer = setTimeout(function () { hfTimer = 0; try { fitHeight(); } catch (e) { /* never block the app */ } }, 60); }
   try {

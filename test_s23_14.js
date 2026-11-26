@@ -24,14 +24,15 @@ function run(o) {
   const foot = { getBoundingClientRect: () => ({ bottom: o.footBottom === undefined ? 700 : o.footBottom }) };
   const li = { offsetHeight: 100 };
   const root = {
-    classList: { add: c => cls.add(c), remove: c => cls.delete(c) },
+    classList: { add: c => cls.add(c), remove: c => cls.delete(c), contains: c => cls.has(c) },
     style: { setProperty: (k, v) => { vars[k] = v; }, removeProperty: k => { delete vars[k]; } },
     get scrollHeight() { return Math.max(win.innerHeight, (o.footBottom === undefined ? 700 : o.footBottom) + (cls.has('hgrow') ? (o.growExtra === undefined ? parseFloat(vars['--hg']) - 100 : o.growExtra) : 0)); }
   };
   const nodes = { progress: { hidden: true }, results: { firstChild: o.results ? {} : null }, empty: { hidden: true }, morebox: { hidden: true }, cardspanel: { hidden: true } };
   const doc = { documentElement: root, activeElement: o.focus ? { tagName: 'INPUT' } : null, getElementById: id => nodes[id] || null, fonts: { ready: { then: f => f() } },
     querySelector: s => s === '.hero h1' ? h1 : s === '.foot' ? foot : s === '.perks li' ? li : (els[s] || null) };
-  vm.runInNewContext(js, { document: doc, window: win, setTimeout: f => 0, clearTimeout: () => 0 });
+  doc.body = { appendChild() {}, removeChild() {} }; doc.createElement = () => ({ style: {} });
+  vm.runInNewContext(js, { document: doc, window: win, getComputedStyle: () => ({ paddingBottom: '0px', fontSize: '16px' }), setTimeout: f => 0, clearTimeout: () => 0 });
   return { cls, vars, win, root };
 }
 let r = run({ need: { eb: 300, cs: 300, sl: 300 }, avail: 250 });
@@ -43,11 +44,11 @@ ok(!r.cls.has('ol-eb') && !r.cls.has('ol-cs') && !r.cls.has('ol-sl') && r.vars['
 r = run({ need: {}, avail: 250 });
 ok(!r.cls.has('ol-eb') && !r.cls.has('ol-sl'), 'missing element: nothing is added');
 r = run({ need: {}, avail: 250, footBottom: 800, vh: 900 });
-ok(r.cls.has('idlehome') && r.cls.has('hgrow') && r.vars['--hg'] === '155px', 'spare 100: slogan pinned and the card grows by 55 (to 155px)');
-r = run({ need: {}, avail: 250, footBottom: 890, vh: 900 });
-ok(r.cls.has('idlehome') && !r.cls.has('hgrow'), 'spare only 10: slogan pinned, card unchanged');
+ok(r.cls.has('idlehome') && r.cls.has('hgrow') && r.vars['--hg'] === '198px', 'spare 100: slogan pinned and the card takes the spare (98 px, to 198px; S23-15 gives back the whole spare)');
+r = run({ need: {}, avail: 250, footBottom: 896, vh: 900 });
+ok(r.cls.has('idlehome') && !r.cls.has('hgrow'), 'spare only 4: slogan pinned, card unchanged');
 r = run({ need: {}, avail: 250, footBottom: 400, vh: 900 });
-ok(r.vars['--hg'] === '172px', 'card growth is capped at 72');
+ok(r.vars['--hg'] === '248px' && r.vars['--hx'] === '22px' && r.cls.has('hx'), 'card growth is capped at 15.5rem (248px at 16px), what is still left goes to the gaps (hx, at most 1.4rem)');
 r = run({ need: {}, avail: 250, footBottom: 700, vh: 900, growExtra: 300 });
 ok(r.cls.has('idlehome') && !r.cls.has('hgrow') && r.vars['--hg'] === undefined, 'if the grown page would be taller than the screen the growth is undone');
 r = run({ need: {}, avail: 250, vh: 900, results: true });
