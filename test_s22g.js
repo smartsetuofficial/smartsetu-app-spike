@@ -86,7 +86,7 @@ ck('late answers of a cancelled run are ignored (onUpdate, catch)', /onUpdate: f
 ck('finally of a cancelled run does not touch the new run screen', /if \(gen === runGen\) \{[^]*?setBusy\(false\);/.test(app));
 ck('all store pages of a run are tracked and closed on cancel', !/tabs2 = (tabs2 \|\| )?W\.createWebTabs/.test(app) && (app.match(/mkTabs\(/g) || []).length >= 7 && /offerWt/.test(app));
 ck('slider hook in app.js', /var Car = require\('\.\/carousel\.js'\)/.test(app) && /Car\.make\(document\.querySelector\('\.perks'\), document, window\)/.test(app));
-ck('app version 0.10.29', /VERSION = '0\.10\.29'/.test(app));
+ck('app version 0.10.30', /VERSION = '0\.10\.30'/.test(app));
 ck('header wraps instead of overflowing (every width and font size)', /\.top \.wrap\{flex-wrap:wrap/.test(css));
 ck('slider css: snap scroll, one card per view, dots, reduced motion', /\.perks\{display:flex;[^}]*scroll-snap-type:x mandatory/.test(css) && /\.perks li\{flex:0 0 100%/.test(css) && /\.pdots button\.on\{width:24px/.test(css) && /prefers-reduced-motion:reduce\)\{\.perks\.js li/.test(css));
 ck('card texts unchanged (owner texts)', ['Save More', 'Shop Smart', 'Check Fast', 'Privacy First', 'Get the lowest price across multiple stores.', 'Compare prices side-by-side in seconds.', 'Find the best deal quickly, no hassle.', 'No sign-in needed. We do not keep your searches.'].every(function (s) { return html.indexOf(s) >= 0; }) && html.indexOf('<ul class="perks">') >= 0);

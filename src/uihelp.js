@@ -76,7 +76,7 @@ function relevantByStore(res) {
     ((res.similar.stores) || []).forEach(function (s) { if (s && has(s.store)) m[s.store] += (typeof s.total === 'number' ? s.total : (s.items ? s.items.length : 0)); });
     return m;
   }
-  (res.clusters || []).forEach(function (cl) { if (cl && cl.queryMatch === false) return; ((cl && cl.members) || []).forEach(function (x) { if (x && has(x.store)) m[x.store] += 1; }); }); // specific search: the screen draws only clusters that match the query
+  (res.clusters || []).forEach(function (cl) { if (cl && cl.queryMatch === false) return; var seen = {}; ((cl && cl.members) || []).forEach(function (x) { if (!x || !has(x.store)) return; var t = String(x.title == null ? '' : x.title).toLowerCase().replace(/\s+/g, ' ').trim(); if (t && x.pricePaise > 0) { var k = x.store + '|' + t + '|' + x.pricePaise; if (seen[k]) return; seen[k] = 1; } m[x.store] += 1; }); }); // S23-22 (D-164): the same one-row rule as view.js, so the store line and the screen agree // specific search: the screen draws only clusters that match the query
   return m;
 }
 // S23-6c: close matches drawn per store (a store that has only close rows). Same source as the screen.

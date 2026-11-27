@@ -16,7 +16,19 @@
     var r = paise / 100;
     return '\u20B9' + r.toLocaleString('en-IN', { maximumFractionDigits: 2 });
   }
-  function availNote(x) { return x.availability === 'unavailable' ? 'Looks unavailable' : null; } // unknown stock is not repeated on every row: search pages do not show stock, the footer says so once
+  function availNote(x) { return x.availability === 'unavailable' ? 'Looks unavailable' : null; }
+  // S23-22 (D-164, ALL stores): in a matching-listings group, the same store + the same title (case and extra spaces ignored) + the same price is ONE row (colour variants), like the similar list (D-105). The row of the lowest-price pick is the one kept. A row without a title or a price is never merged.
+  function oneRowEach(members, pick) {
+    var at = {}, out = [];
+    members.forEach(function (m) {
+      var t = String(m && m.title == null ? '' : (m && m.title)).toLowerCase().replace(/\s+/g, ' ').trim();
+      if (!m || !t || !(m.pricePaise > 0)) { out.push(m); return; }
+      var k = m.store + '|' + t + '|' + m.pricePaise;
+      if (at[k] === undefined) { at[k] = out.length; out.push(m); return; }
+      if (pick && pick.member && m.url === pick.member.url) out[at[k]] = m;
+    });
+    return out;
+  } // unknown stock is not repeated on every row: search pages do not show stock, the footer says so once
 
   function row(store, title, url, pricePaise, mrpPaise, availability, isLowest, odd) {
     var mrp = mrpPaise > pricePaise ? rupees(mrpPaise) : null;
@@ -58,7 +70,7 @@
       cl.forEach(function (c) {
         var pick = c.pick, comparable = !!(pick && pick.comparable);
         var isOdd = function (m) { return (m.flags || []).indexOf('E_PRICE_BAND') >= 0 ? 1 : 0; }; // D-073: a price far from its peers (any store) goes last and is never shown as lowest
-        var members = c.members.slice().sort(function (a, b) { return (isOdd(a) - isOdd(b)) || (a.pricePaise - b.pricePaise) || (a.store < b.store ? -1 : 1); });
+        var members = c.members.slice().sort(function (a, b) { return (isOdd(a) - isOdd(b)) || (a.pricePaise - b.pricePaise) || (a.store < b.store ? -1 : 1); }); members = oneRowEach(members, pick);
         v.groups.push({
           title: members[0].title, stores: members.map(function (m) { return storeName(m.store); }).filter(function (x, i, a) { return a.indexOf(x) === i; }),
           comparable: comparable,
