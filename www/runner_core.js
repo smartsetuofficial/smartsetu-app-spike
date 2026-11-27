@@ -32,7 +32,22 @@
   function setStage(ctx, s) { ctx.stage = s; ctx.stageAt = Date.now(); }
 
   // Runs inside the store page (diagnostic only): page state, tab visibility, number of links. Reads no text, no login, no cookies.
-  function pageInfo() { return { readyState: document.readyState, visibility: document.visibilityState, links: document.querySelectorAll('a[href]').length }; }
+  // S23-17 (D-162): also ONE yes/no: do the visible words of the page say that nothing was found (same words as fetchread NO_RES)? Asked only after an empty read; only the boolean leaves the page, no text.
+  var NR_EXTRA = []; // S23-18 (D-163): extra no-results words from the store record (data only)
+  function pageInfo(extra) {
+    var nr = false;
+    try { var t = String((document.body && document.body.innerText) || '').slice(0, 60000); nr = /\bno results?\b|\bno (?:products?|items?|matches|listings?) (?:found|available|matched)|did(?: not|n't) match any|(?:could not|couldn't|can't|cannot|unable to) find (?:any|a match)|\b0 results?\b|nothing (?:found|matched)/i.test(t); if (!nr && Array.isArray(extra) && extra.length) { var lt = t.toLowerCase(); for (var xi = 0; xi < extra.length; xi++) { if (lt.indexOf(extra[xi]) >= 0) { nr = true; break; } } } } catch (_) { nr = false; }
+    return { readyState: document.readyState, visibility: document.visibilityState, links: document.querySelectorAll('a[href]').length, nr: nr };
+  }
+  // S23-17 (D-162, ALL stores): a search tab that stays EMPTY and whose title is the store's home title (no search word in it) did not show the search (Tata CLiQ, 0.10.28 report: path /search/, home title, 0 cards, 3 of 11 searches). It gets ONE fresh tab. UNVERIFIED on a phone.
+  var HOME_TITLE_TAB = /\bonline\s+[a-z&,\s]{0,40}?(?:store|shopping|shop)\b|\bshop online\b|\bofficial (?:site|store|website)\b|\bhome\s?page\b/i;
+  var STOP_TAB = { for: 1, and: 1, the: 1, with: 1, under: 1, over: 1, from: 1, best: 1, cheap: 1, buy: 1, online: 1, price: 1, ke: 1, ka: 1, ki: 1, andar: 1, sasta: 1, kam: 1 };
+  function homeLike(title, query) {
+    var t = String(title || ''); if (!t) return false;
+    var words = String(query || '').toLowerCase().split(/[^a-z0-9]+/).filter(function (w) { return w.length >= 3 && !STOP_TAB[w]; }), low = t.toLowerCase();
+    if (!words.length || words.some(function (w) { return low.indexOf(w) >= 0; })) return false;
+    return HOME_TITLE_TAB.test(t);
+  }
 
   async function runStore(api, store, query, o, ctx) {
     var t0 = Date.now(), tab = null;
@@ -46,23 +61,27 @@
       setStage(ctx, 'settling');
       await sleep(o.settleMs == null ? 1500 : o.settleMs);
       setStage(ctx, 'reading');
-      var snap = null, tries = 0, maxTries = 1 + (o.rereads > 0 ? o.rereads : 0);
+      var snap = null, tries = 0, maxTries = 1 + (o.rereads > 0 ? o.rereads : 0), said = null;
       for (;;) { // S12-8 (D-073, all stores): a list that is empty or unreadable is read again in the same tab (o.rereads times, o.rereadMs apart), so a page that draws late is not reported as empty
         var res = await api.scripting.executeScript({ target: { tabId: tab.id }, func: o.collect, args: [query] });
         snap = res && res[0] && res[0].result; tries++;
         if ((snap && Array.isArray(snap.cards) && snap.cards.length) || tries >= maxTries) break;
+        if (o.rereads > 0 && o.stopOnNoResults !== false) { // S23-17 (D-162, ALL stores): an empty list whose page SAYS no results is not read again (Tata CLiQ and Croma burned 18 s on it)
+          try { var pi = await Promise.race([api.scripting.executeScript({ target: { tabId: tab.id }, func: pageInfo, args: NR_EXTRA.length ? [NR_EXTRA] : [] }), new Promise(function (res) { setTimeout(function () { res(null); }, o.pageInfoMs == null ? 2500 : o.pageInfoMs); })]); pi = pi && pi[0] && pi[0].result; if (pi && pi.nr === true) { said = pi; break; } } catch (_) { /* keep reading */ }
+        }
         setStage(ctx, 'settling'); await sleep(o.rereadMs == null ? 2500 : o.rereadMs); setStage(ctx, 'reading');
       }
       var extra = tries > 1 ? { rereads: tries - 1 } : {};
       if (!(snap && Array.isArray(snap.cards) && snap.cards.length) && o.rereads > 0) { // still empty: ask the page only for its state (no text, no links), so the cause can be seen
         try {
-          var dg = await api.scripting.executeScript({ target: { tabId: tab.id }, func: pageInfo, args: [] });
-          dg = dg && dg[0] && dg[0].result;
-          if (dg && typeof dg.readyState === 'string') extra.diag = { readyState: dg.readyState, visibility: String(dg.visibility), links: Number(dg.links) || 0 };
+          var dg = said;
+          if (!dg) { dg = await Promise.race([api.scripting.executeScript({ target: { tabId: tab.id }, func: pageInfo, args: NR_EXTRA.length ? [NR_EXTRA] : [] }), new Promise(function (res) { setTimeout(function () { res(null); }, o.pageInfoMs == null ? 2500 : o.pageInfoMs); })]); dg = dg && dg[0] && dg[0].result; }
+          if (dg && typeof dg.readyState === 'string') extra.diag = { readyState: dg.readyState, visibility: String(dg.visibility), links: Number(dg.links) || 0, nr: dg.nr === true };
         } catch (_) {}
       }
       if (!snap || !Array.isArray(snap.cards)) return Object.assign({ store: store.label, key: store.key, state: 'no_data', ms: ms() }, extra);
-      return Object.assign({ store: store.label, key: store.key, state: snap.cards.length ? 'ok' : 'no_cards', cards: snap.cards.length, snapshot: snap, ms: ms() }, extra);
+      var nrTab = !snap.cards.length && extra.diag && extra.diag.nr === true ? { noResults: true, nrWhy: 'tab text' } : {}; // S23-17 (D-162): the page itself said so
+      return Object.assign({ store: store.label, key: store.key, state: snap.cards.length ? 'ok' : 'no_cards', cards: snap.cards.length, snapshot: snap, ms: ms() }, extra, nrTab);
     } catch (e) {
       return { store: store.label, key: store.key, state: 'error', error: String((e && e.message) || e), stage: ctx.stage, ms: ms() };
     } finally {
@@ -113,7 +132,13 @@
     var useFetch = typeof o.fetchRead === 'function', slots = o.slots || makeSlots(o.maxTabs > 0 ? o.maxTabs : Infinity), acquire = slots.acquire, release = slots.release;
     // S23-9b (D-143): waiting tab jobs have a priority. A store whose plain fetch failed (it is likely readable) goes before stores that only have a tab (priority 0 before 1); same priority keeps the order of arrival.
     function tabJob(store, extra, prio) {
-      return acquire(prio).then(function () { var cap = budgetFor(perStore, o.deadlineAt, Date.now(), o.minTabMs, o.tailMs); if (cap === 0) return { store: store.label, key: store.key, state: 'skipped', stage: 'waiting', ms: 0 }; /* S23-6c: after the deadline no new store tab is opened; S23-11 (D-155): also not in the last seconds before it */ return guarded(store, cap); }).then(function (r) { release(); if (extra) Object.assign(r, extra); return r; }, function (e) { release(); throw e; });
+      return acquire(prio).then(function () { var cap = budgetFor(perStore, o.deadlineAt, Date.now(), o.minTabMs, o.tailMs); if (cap === 0) return { store: store.label, key: store.key, state: 'skipped', stage: 'waiting', ms: 0 }; /* S23-6c: after the deadline no new store tab is opened; S23-11 (D-155): also not in the last seconds before it */ return guarded(store, cap).then(function (r) { // S23-17 (D-162): one fresh tab for an empty page with the store's home title (the slot stays held)
+        if (r && r.state === 'no_cards' && !r.noResults && o.freshRetry !== false && homeLike(r.snapshot && r.snapshot.title, query)) {
+          var cap2 = budgetFor(perStore, o.deadlineAt, Date.now(), o.minTabMs, o.tailMs);
+          if (cap2 > 0) return guarded(store, Math.min(cap2, o.freshRetryMs == null ? 15000 : o.freshRetryMs)).then(function (r2) { r2.freshRetry = true; r2.firstTry = { state: r.state, ms: r.ms }; return r2; });
+        }
+        return r;
+      }); }).then(function (r) { release(); if (extra) Object.assign(r, extra); return r; }, function (e) { release(); throw e; });
     }
     // S23-9b (D-143): a fetch that finished with no cards or an error gets ONE more try after the other first fetches are done (or after 2.5 s), before a tab is used. What each try saw (HTTP status, bytes, first words) is kept in fetchDiag.
     var firstFetches = [];
@@ -174,6 +199,6 @@
     };
   }
 
-  var api = { STORES: STORES, runAll: runAll, runStore: runStore, waitLoad: waitLoad, budgetFor: budgetFor, emptyPageIsNoResults: emptyPageIsNoResults, makeSlots: makeSlots };
+  var api = { setNrWords: function (a) { NR_EXTRA = Array.isArray(a) ? a.slice() : []; }, STORES: STORES, runAll: runAll, runStore: runStore, waitLoad: waitLoad, budgetFor: budgetFor, emptyPageIsNoResults: emptyPageIsNoResults, makeSlots: makeSlots, homeLike: homeLike, pageInfo: pageInfo };
   if (typeof module !== 'undefined' && module.exports) module.exports = api; else root.SmartSetuRunner = api;
 })(typeof globalThis !== 'undefined' ? globalThis : self);

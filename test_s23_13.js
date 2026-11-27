@@ -104,7 +104,7 @@ var AZ = R.STORES.filter(function (s) { return s.key === 'amazon'; })[0], RD = R
   ck('6e runner_core and fetchread are byte-identical in app-spike/www and extension', ['runner_core.js', 'fetchread.js'].every(function (f) { return fs.readFileSync(path.join(__dirname, 'www', f), 'utf8') === fs.readFileSync(path.join(ext, f), 'utf8'); }), 0);
   var wt = fs.readFileSync(path.join(__dirname, 'src/webtabs.js'), 'utf8');
   ck('6f webtabs uses the id of the load event and a per object answer prefix', /lid = ev && ev\.id != null/.test(wt) && /'c' \+ inst \+ '_'/.test(wt), 0);
-  ck('6g version 0.10.28', /VERSION = '0\.10\.28'/.test(app) && JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version === '0.10.28', 0);
+  ck('6g version 0.10.29', /VERSION = '0\.10\.29'/.test(app) && JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version === '0.10.29', 0);
 
   console.log('test_s23_13: ' + pass + ' pass, ' + fail + ' fail');
   process.exit(fail ? 1 : 0);

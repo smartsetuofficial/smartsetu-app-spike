@@ -37,7 +37,8 @@ function analyseRun(run, parse, item, maxPrice) {
     if (run && run.snapshot && (run.state !== 'ok' || !o.readCards)) {
       var sp = ''; try { sp = new URL(run.snapshot.url).pathname.slice(0, 50); } catch (_) { sp = '?'; }
       var dg2 = run.diag ? ' | ready ' + run.diag.readyState + ' | ' + run.diag.visibility + ' | links ' + run.diag.links : '';
-      o.pg = 'path ' + sp + ' | title ' + oneLine(run.snapshot.title, 70) + ' | cards ' + o.readCards + dg2;
+      var fr2 = (run.freshRetry ? ' | fresh tab tried (first try ' + (run.firstTry && run.firstTry.state) + ')' : '') + (run.diag && run.diag.nr ? ' | page words say no results' : ''); // S23-17 (D-162)
+      o.pg = 'path ' + sp + ' | title ' + oneLine(run.snapshot.title, 70) + ' | cards ' + o.readCards + dg2 + fr2;
     }
   } catch (_) { /* report only */ }
   if (!run || !run.snapshot) return o;
@@ -133,9 +134,10 @@ function homeLine(p) {
     return h ? oneLine(JSON.stringify(h), 600) : 'not available';
   } catch (e) { return 'not available'; }
 }
+function recordLine(p) { try { return typeof p.recordDiag === 'function' ? String(p.recordDiag()) : (typeof window !== 'undefined' && typeof window.smartsetuRecordDiag === 'function' ? String(window.smartsetuRecordDiag()) : 'not available'); } catch (_) { return 'not available'; } } // S23-18 (D-163)
 function buildReport(p) {
   var sums = p.sums || [], total = (p.queries || QUERIES).length, g = gate(sums), aiOn = sums.filter(function (s) { return s.item.ai; }).length;
-  var L = ['SmartSetu FULL TEST MODE report (test build ' + (p.version || '?') + ')', 'Searches done: ' + sums.length + ' of ' + total + (p.partial ? ' (PARTIAL, the run is still going or was stopped)' : '') + ' | AI allowed on ' + aiOn + ' | Total: ' + (p.totalS == null ? '?' : p.totalS) + ' s | Seen at: ' + (p.seenAt || ''), 'Browser: ' + (p.ua || '?'), 'HOME: ' + homeLine(p),
+  var L = ['SmartSetu FULL TEST MODE report (test build ' + (p.version || '?') + ')', 'Searches done: ' + sums.length + ' of ' + total + (p.partial ? ' (PARTIAL, the run is still going or was stopped)' : '') + ' | AI allowed on ' + aiOn + ' | Total: ' + (p.totalS == null ? '?' : p.totalS) + ' s | Seen at: ' + (p.seenAt || ''), 'Browser: ' + (p.ua || '?'), 'HOME: ' + homeLine(p), 'STORE RECORD: ' + recordLine(p),
     'Gate limits are first values, NOT measured on a phone: price >= ' + LIMITS.price + '%, links >= ' + LIMITS.link + '%, repeated titles <= ' + LIMITS.repeat + '%, off-topic <= ' + LIMITS.off + '%, stores with listings >= ' + LIMITS.productive + '% of searches. Off-topic = the title has none of the words chosen for that search (a rough check).',
     '', 'PART 1: STORE QUALITY GATE (all searches except the nonsense one)'];
   if (!g.length) L.push('- (no search finished yet)');

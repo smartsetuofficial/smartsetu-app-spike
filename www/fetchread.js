@@ -8,6 +8,7 @@
   // S23-13 (D-158): words a store page uses when a search found nothing (visible text only, any store). Used ONLY for a fetched page with 0 cards.
   var NO_RES = /\bno results?\b|\bno (?:products?|items?|matches|listings?) (?:found|available|matched)|did(?: not|n't) match any|(?:could not|couldn't|can't|cannot|unable to) find (?:any|a match)|\b0 results?\b|nothing (?:found|matched)/i;
   var NO_RES_URL = /no[-_]?search[-_]?results|no[-_]?results/i;
+  var EXTRA = []; // S23-18 (D-163): extra no-results words from the store record (data only, lower case)
   function bare(h) { return String(h || '').toLowerCase().replace(/^www\./, ''); }
   function sameSite(a, b) { try { var x = bare(new URL(a).hostname), y = bare(new URL(b).hostname); return x === y || x.endsWith('.' + y) || y.endsWith('.' + x); } catch (_) { return false; } }
 
@@ -52,7 +53,7 @@
         try {
           var byUrl = NO_RES_URL.test(String(resp.url || url).split('?')[0]);
           var vis = txt.slice(0, 1500000).replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/style>|<[^>]*>/gi, ' ').replace(/\s+/g, ' ');
-          var byText = NO_RES.test(vis);
+          var byText = NO_RES.test(vis); if (!byText && EXTRA.length) { var lv = vis.toLowerCase(); for (var xi = 0; xi < EXTRA.length; xi++) { if (lv.indexOf(EXTRA[xi]) >= 0) { byText = true; break; } } }
           d.nr = byUrl || byText; if (d.nr) d.nrWhy = byUrl ? 'url' : 'text';
           if (!d.nr && homeAnswer(url, resp.url || url, d.title, query)) { d.nr = true; d.nrWhy = 'home'; } // S23-16 (D-161)
         } catch (_) { d.nr = false; }
@@ -63,7 +64,7 @@
     return read;
   }
 
-  var api = { STORES_OK: STORES_OK, make: make, sameSite: sameSite, homeAnswer: homeAnswer };
+  var api = { setNrWords: function (a) { EXTRA = Array.isArray(a) ? a.slice() : []; }, STORES_OK: STORES_OK, make: make, sameSite: sameSite, homeAnswer: homeAnswer };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   else {
     api.read = (typeof fetch === 'function' && root.SmartSetuSnapDoc) ? make(function (u, o) { return fetch(u, o); }, root.SmartSetuSnapDoc.snapFromHtml) : undefined;

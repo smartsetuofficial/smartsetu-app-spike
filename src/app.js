@@ -14,7 +14,7 @@ var Car = require('./carousel.js'); // S22g: Why SmartSetu cards slide one by on
 var AIF = require('./aiflow.js'); // S23-2c (D-132): glue to the AI Worker (query meaning + accessory labels), tested in Node with a fake worker
 var OF = require('./offerflow.js').make({ parser: SmartSetu.parser, adapter: SmartSetu.adapter, offers: SmartSetu.offers, isTileLine: W.isTileLine }); // S22b-2: offers under result rows (D-117)
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.28';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.29';
 var cards = [], offerRaw = {}, offerTok = 0, lastView = null; // member's own cards (phone only), offer lines read from product pages (by listing url), run token, last drawn view
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = {};
@@ -22,6 +22,9 @@ var PAUSED = {};
 // Any problem (no network, slow, bad answer, daily limit) = the old behaviour, never an error screen. Answers are kept in memory for this app run only. Start waits are NOT measured on a phone (V-531). ----
 var AI_URL = 'https://smartsetu-ai.smartsetuofficial.workers.dev', aiLast = null, aiLabels = null; // aiLabels = { isA } hook for the engine while a search that used the AI is on screen
 var AIX = AIF.make({ url: AI_URL, post: function (u, body, ms) { return Promise.resolve(CapacitorHttp.post({ url: u, headers: { 'Content-Type': 'application/json' }, data: body, connectTimeout: ms, readTimeout: ms })).then(function (r) { if (!r || r.status !== 200) throw new Error('http ' + (r && r.status)); var d = r.data; return typeof d === 'string' ? JSON.parse(d) : d; }); } });
+var SRX = SmartSetuStoreRecord.make({ runner: R, fetchRead: SmartSetuFetchRead, parser: SmartSetu.parser, getText: function (u, ms) { return Promise.resolve(CapacitorHttp.get({ url: u, headers: { Accept: 'application/json' }, responseType: 'text', connectTimeout: ms, readTimeout: ms })).then(function (r) { if (!r || r.status !== 200) throw new Error('HTTP ' + (r && r.status)); return typeof r.data === 'string' ? r.data : JSON.stringify(r.data); }); } }); // S23-18 (D-163): the store record (data only, from smartsetu.in); any problem = the built-in values
+window.smartsetuRecordDiag = function () { return SRX.diagLine(); };
+try { SRX.start(); } catch (_) { /* the built-in values stay */ }
 var lastStores = null; // S23-6c: state, stage and seconds of every store of the last normal Compare (for the owner-only report)
 var STORE_MS = 20000, GATE_MS = 50000, MAX_TABS = 2; // S23-6c time cap, S23-13 (D-158) values (NOT measured on the phone): a store gets 20 s, no new store tab and no extra try after 50 s (30 s skipped Myntra, Ajio, Meesho, Croma in the 2nd Full Test); at most MAX_TABS hidden pages open at once (V-599: the plugin supports several)
 function storesDiag() { try { return lastStores ? ' | STORES ' + JSON.stringify(lastStores) : ' | STORES none yet'; } catch (e) { return ''; } }
@@ -207,7 +210,8 @@ function runStores(tabs, o) { return R.runAll(tabs, o); }
 // S21b (D-110): which stores to open is NOT decided from a word list any more (the table in storemap.js is a guess, V-271, and cannot cover thousands of searches). Every store is read; the store line then says how many listings match (paintRelevance). Set true to bring the old skip back.
 var SKIP_BY_WORDS = false;
 function plan(q, only) {
-  var kill = W.enabledMap(), pick = M.pick(q, R.STORES), enabled = {}, why = {}, skipped = [];
+  try { SRX.maybeRefresh(); } catch (_) { /* optional */ }
+  var kill = Object.assign({}, W.enabledMap(), SRX.enabledMap()), pick = M.pick(q, R.STORES), enabled = {}, why = {}, skipped = [];
   R.STORES.forEach(function (s) {
     var on = kill[s.label] !== false;
     if (SKIP_BY_WORDS && on && pick.skip[s.key]) { why[s.label] = pick.skip[s.key]; skipped.push(s.label); on = false; }
@@ -329,7 +333,7 @@ async function startRun(q, only) {
       }
     }
     if (live.timer) { clearTimeout(live.timer); live.timer = 0; }
-    if (!extra) { try { lastStores = (out.runs || []).map(function (r) { return { s: r.store, st: r.state, g: r.stage || null, ms: r.ms || 0, at: r.doneAt || null, fb: r.fetchFallback || null, ft: r.fetchTries || null, fd: r.fetchDiag || null, fd1: r.fetchDiag1 || null, via: r.via || null, nr: r.noResults ? 1 : null, n: r.cards == null ? null : r.cards }; }); } catch (_) { lastStores = null; } }
+    if (!extra) { try { SRX.noteRuns(out.runs); } catch (_) { /* optional */ } try { lastStores = (out.runs || []).map(function (r) { return { s: r.store, st: r.state, g: r.stage || null, ms: r.ms || 0, at: r.doneAt || null, fb: r.fetchFallback || null, ft: r.fetchTries || null, fd: r.fetchDiag || null, fd1: r.fetchDiag1 || null, via: r.via || null, nr: r.noResults ? 1 : null, n: r.cards == null ? null : r.cards }; }); } catch (_) { lastStores = null; } }
     var fin = buildNow(out.seenAt);
     render(fin.view);
     if (!extra) live.skipped = pl.skipped;
