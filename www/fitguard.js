@@ -6,6 +6,7 @@
   if (!h) return;
   var LIMIT = 8, MINK = 0.55;
   function fit() {
+    try { normFont(); } catch (e) { /* never block the app */ }
     try {
       root.classList.remove('fitwrap');
       root.style.removeProperty('--fitk');
@@ -26,6 +27,21 @@
     try { fitPlaceholder(); } catch (e) { /* never block the app */ }
     try { fitOneLine(); } catch (e) { /* never block the app */ }
     try { fitHeight(); } catch (e) { /* never block the app */ }
+  }
+  /* S23-24 (D-166): the phone's system font size (Android WebView text zoom) makes every rem 10 to 50 percent bigger, so the same page looked different on two phones of the same width (the tag fell to its own row, the privacy note was hidden, the slogan was cut). The page's base size is measured and cancelled: after this the base is the same as at normal font size on any phone, and the steps below only have to deal with the screen height. Verified after setting, otherwise the change is undone. No storage, no network. */
+  function normFont() {
+    root.style.removeProperty('--rootfs');
+    var vw = window.innerWidth || root.clientWidth || 0;
+    if (window.screen && window.screen.width > 0 && window.screen.width < vw) vw = window.screen.width;
+    if (!vw) return;
+    var base = Math.min(17.5, Math.max(13.5, vw * 0.040712));
+    var m = parseFloat(getComputedStyle(root).fontSize) || 0;
+    if (!m) return;
+    var z = m / base;
+    if (Math.abs(z - 1) < 0.02 || z < 0.7 || z > 2.5) return;
+    root.style.setProperty('--rootfs', (Math.round(base / z * 1000) / 1000) + 'px');
+    var m2 = parseFloat(getComputedStyle(root).fontSize) || 0;
+    if (Math.abs(m2 - base) > base * 0.04) root.style.removeProperty('--rootfs');
   }
   /* S23-9 (D-142): the logo row (logo + motto + tag) is measured too, not only the heading. If the tag would touch the logo text or leave the screen, the row texts shrink step by step; if even 0.5 does not fit, the tag drops to its own row. */
   function fitHeader() {
@@ -67,7 +83,7 @@
     if (inp.getAttribute('placeholder') !== pick) inp.setAttribute('placeholder', pick);
   }
   /* S23-12 (D-157): the idle home screen (no results, no progress, no card panel) must show everything from the logo to the slogan on one screen, on any phone height. Steps from the least to the most visible change, each tested by measuring the real page height: (1) gaps, card height and footer space shrink by a ratio, (2) the 'Why SmartSetu' card turns into a compact row, (3) the privacy note (it is also a slide) is hidden, (4) the lead line is hidden. Heading, logo, search and Compare button are never made smaller by this step. Not applied in landscape or while the keyboard is open. No storage, no network. */
-  var HF_CLS = ['hfit', 'hfrow', 'hfpriv', 'hftry', 'hflead'];
+  var HF_CLS = ['hfit', 'hfrow', 'hfpsm', 'hfpriv', 'hftry', 'hflead'];
   /* S23-15 (D-160): every measurement starts from the plain page. Classes and variables of the last measurement never stay behind (they spoiled the next one). */
   var VCLS = HF_CLS.concat(['hgrow', 'hx', 'idlehome', 'navres']), VVARS = ['--hf', '--hft', '--hg', '--hx', '--navres'];
   function resetVertical() {
@@ -106,7 +122,7 @@
     root.style.setProperty('--navres', Math.max(0, Math.round(52 - sabPx())) + 'px'); root.classList.add('navres');
     function over() { return root.scrollHeight - vh; }
     if (over() <= 1) return;
-    var sets = [[['hfit'], 0.76], [['hfit', 'hfrow'], 0.6], [['hfit', 'hfrow', 'hfpriv'], 0.6], [['hfit', 'hfrow', 'hfpriv', 'hftry'], 0.6], [['hfit', 'hfrow', 'hfpriv', 'hftry', 'hflead'], 0.4]];
+    var sets = [[['hfit'], 0.76], [['hfit', 'hfrow'], 0.6], [['hfit', 'hfrow', 'hfpsm'], 0.6], [['hfit', 'hfrow', 'hfpsm', 'hfpriv'], 0.6], [['hfit', 'hfrow', 'hfpsm', 'hfpriv', 'hftry'], 0.6], [['hfit', 'hfrow', 'hfpsm', 'hfpriv', 'hftry', 'hflead'], 0.4]];
     for (var s = 0; s < sets.length; s++) {
       HF_CLS.forEach(function (c) { root.classList.remove(c); });
       sets[s][0].forEach(function (c) { root.classList.add(c); });
@@ -172,7 +188,7 @@
   window.smartsetuHomeDiag = function () {
     var f = document.querySelector('.foot'), s = document.querySelector('.slogan'), li = document.querySelector('.perks li'), m = document.querySelector('.mark');
     var vv = window.visualViewport;
-    return { iw: window.innerWidth, ih: window.innerHeight, ch: root.clientHeight, vv: vv ? Math.round(vv.height) : null, sh: root.scrollHeight, sab: Math.round(sabPx()), dpr: window.devicePixelRatio, rem: parseFloat(getComputedStyle(root).fontSize), cls: root.className, foot: f ? Math.round(f.getBoundingClientRect().bottom) : null, slog: s ? Math.round(s.getBoundingClientRect().bottom) : null, card: li ? li.offsetHeight : null, mark: m ? Math.round(m.getBoundingClientRect().width) : null, hg: root.style.getPropertyValue('--hg') || null, hf: root.style.getPropertyValue('--hf') || null, hx: root.style.getPropertyValue('--hx') || null };
+    return { iw: window.innerWidth, ih: window.innerHeight, ch: root.clientHeight, vv: vv ? Math.round(vv.height) : null, sh: root.scrollHeight, sab: Math.round(sabPx()), dpr: window.devicePixelRatio, rem: parseFloat(getComputedStyle(root).fontSize), cls: root.className, foot: f ? Math.round(f.getBoundingClientRect().bottom) : null, slog: s ? Math.round(s.getBoundingClientRect().bottom) : null, card: li ? li.offsetHeight : null, mark: m ? Math.round(m.getBoundingClientRect().width) : null, hg: root.style.getPropertyValue('--hg') || null, hf: root.style.getPropertyValue('--hf') || null, hx: root.style.getPropertyValue('--hx') || null, rfs: root.style.getPropertyValue('--rootfs') || null, pgap: (function () { var p = document.querySelector('.privacy'); return (p && s && p.offsetParent) ? Math.round(s.getBoundingClientRect().top - p.getBoundingClientRect().bottom) : null; })() };
   };
   var hfTimer = 0;
   function hfSoon() { if (hfTimer) clearTimeout(hfTimer); hfTimer = setTimeout(function () { hfTimer = 0; try { fitHeight(); } catch (e) { /* never block the app */ } }, 60); }

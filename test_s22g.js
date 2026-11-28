@@ -80,13 +80,13 @@ ck('Compare button stays active while a search runs', /function setBusy\(b\) \{ 
 ck('onSubmit no longer drops a second search', !/function onSubmit\(ev\) \{\s*ev\.preventDefault\(\);\s*if \(busy\) return;/.test(app));
 ck('new search cancels the old (cancelRun, runGen)', /function cancelRun\(\)/.test(app) && /if \(busy\) \{ if \(only \|\| q === live\.q\)/.test(app) && /var gen = \+\+runGen;/.test(app));
 ck('same search twice while running is ignored with a message', /Already comparing this search/.test(app));
-var awaits = (app.match(/await W\.(rescueRead|pinRead|slowRead)\(|await runStores\(/g) || []).length, stale = (app.match(/if \(gen !== runGen\) return;/g) || []).length;
+var awaits = (app.match(/await (capRead|W\.(rescueRead|pinRead|slowRead))\(|await runStores\(/g) || []).length, stale = (app.match(/if \(gen !== runGen\) return;/g) || []).length;
 ck('every await in startRun is followed by a stale check (' + awaits + ' awaits, ' + stale + ' checks)', awaits === 7 && stale >= awaits + 2);
 ck('late answers of a cancelled run are ignored (onUpdate, catch)', /onUpdate: function \(r\) \{ if \(gen !== runGen\) return;/.test(app) && /\} catch \(e\) \{\s*if \(gen !== runGen\) return;/.test(app));
 ck('finally of a cancelled run does not touch the new run screen', /if \(gen === runGen\) \{[^]*?setBusy\(false\);/.test(app));
 ck('all store pages of a run are tracked and closed on cancel', !/tabs2 = (tabs2 \|\| )?W\.createWebTabs/.test(app) && (app.match(/mkTabs\(/g) || []).length >= 7 && /offerWt/.test(app));
 ck('slider hook in app.js', /var Car = require\('\.\/carousel\.js'\)/.test(app) && /Car\.make\(document\.querySelector\('\.perks'\), document, window\)/.test(app));
-ck('app version 0.10.30', /VERSION = '0\.10\.30'/.test(app));
+ck('app version 0.10.31', /VERSION = '0\.10\.31'/.test(app));
 ck('header wraps instead of overflowing (every width and font size)', /\.top \.wrap\{flex-wrap:wrap/.test(css));
 ck('slider css: snap scroll, one card per view, dots, reduced motion', /\.perks\{display:flex;[^}]*scroll-snap-type:x mandatory/.test(css) && /\.perks li\{flex:0 0 100%/.test(css) && /\.pdots button\.on\{width:24px/.test(css) && /prefers-reduced-motion:reduce\)\{\.perks\.js li/.test(css));
 ck('card texts unchanged (owner texts)', ['Save More', 'Shop Smart', 'Check Fast', 'Privacy First', 'Get the lowest price across multiple stores.', 'Compare prices side-by-side in seconds.', 'Find the best deal quickly, no hassle.', 'No sign-in needed. We do not keep your searches.'].every(function (s) { return html.indexOf(s) >= 0; }) && html.indexOf('<ul class="perks">') >= 0);

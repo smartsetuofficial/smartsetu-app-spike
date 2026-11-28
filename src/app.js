@@ -14,7 +14,7 @@ var Car = require('./carousel.js'); // S22g: Why SmartSetu cards slide one by on
 var AIF = require('./aiflow.js'); // S23-2c (D-132): glue to the AI Worker (query meaning + accessory labels), tested in Node with a fake worker
 var OF = require('./offerflow.js').make({ parser: SmartSetu.parser, adapter: SmartSetu.adapter, offers: SmartSetu.offers, isTileLine: W.isTileLine }); // S22b-2: offers under result rows (D-117)
 
-var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.30';
+var R = SmartSetuRunner, V = SmartSetuView, busy = false, runGen = 0, activeTabs = [], offerWt = null, plistItems = {}, pstates = {}, pactive = {}, maxDone = 0, retry = false, VERSION = '0.10.31';
 var cards = [], offerRaw = {}, offerTok = 0, lastView = null; // member's own cards (phone only), offer lines read from product pages (by listing url), run token, last drawn view
 var live = { runs: {}, q: '', scrolled: false, timer: 0, firstAt: 0, t0: 0, skipped: [] };
 var PAUSED = {};
@@ -265,11 +265,14 @@ async function startRun(q, only) {
     // S23-13 (D-158): Myntra and Croma start at once on their own slot with their own page identity (they were read last and the time gate skipped them: 11 of 11 and 4 of 11 in the 2nd Full Test). Results are kept here and put into out after the other stages.
     var hiRuns = [];
     function skipRun(label) { var st = storeOf(label); return { store: st.label, key: st.key, state: 'skipped', stage: 'waiting', ms: 0 }; }
+    /* S23-23 (D-166): one read of Myntra, Croma or a retry never holds the whole search longer than HI_CAP_MS (the Full Test of 27 Nov 2026 had Myntra at 70 s and 224.8 s with 0 results and 7 stores skipped). Over the limit the store counts as timed out, the other stores show their rows. The value is NOT measured on a phone. */
+    var HI_CAP_MS = 45000;
+    function capRead(st, p) { var t, lim = new Promise(function (res) { t = setTimeout(function () { res({ store: st.label, key: st.key, state: 'timeout', stage: 'reading', ms: HI_CAP_MS, capped: true }); }, HI_CAP_MS); }); return Promise.race([p, lim]).then(function (r) { clearTimeout(t); return r; }, function (e) { clearTimeout(t); throw e; }); }
     async function stepMyntra() {
       if (!pl.enabled.Myntra) return;
       if (late()) { var ms0 = skipRun('Myntra'); hiRuns.push(ms0); updateProgress(ms0); adopt([ms0]); return; }
       tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
-      var mr = await W.rescueRead(tabs2, storeOf('Myntra'), q, {});
+      var mr = await capRead(storeOf('Myntra'), W.rescueRead(tabs2, storeOf('Myntra'), q, {}));
       if (gen !== runGen) return;
       hiRuns.push(mr); updateProgress(mr); adopt([mr]); liveRender();
     }
@@ -277,7 +280,7 @@ async function startRun(q, only) {
       if (!pl.enabled.Croma) return;
       if (late()) { var cs0 = skipRun('Croma'); hiRuns.push(cs0); updateProgress(cs0); adopt([cs0]); return; }
       tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent)); // S21e: Croma needs a pincode before it shows products; the app types a fixed one (owner: the listing does not change), see W.pincodeSet
-      var cr = await W.pinRead(tabs2, storeOf('Croma'), q, W.CROMA_PIN, {});
+      var cr = await capRead(storeOf('Croma'), W.pinRead(tabs2, storeOf('Croma'), q, W.CROMA_PIN, {}));
       if (gen !== runGen) return;
       hiRuns.push(cr); updateProgress(cr); adopt([cr]); liveRender();
     }
@@ -316,7 +319,7 @@ async function startRun(q, only) {
       tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
       for (var sl = 0; sl < slowL.length; sl++) {
         say('Still checking ' + slowL[sl] + '...');
-        var sr = await W.slowRead(tabs2, storeOf(slowL[sl]), q, smartsetuCollect, {});
+        var sr = await capRead(storeOf(slowL[sl]), W.slowRead(tabs2, storeOf(slowL[sl]), q, smartsetuCollect, {}));
         if (gen !== runGen) return;
         W.mergeRuns(out, { runs: [sr] }); updateProgress(sr); adopt([sr]); liveRender();
       }
@@ -327,7 +330,7 @@ async function startRun(q, only) {
       tabs2 = tabs2 || mkTabs(C.desktopUa(navigator.userAgent));
       for (var em = 0; em < empty.length; em++) {
         say('Still checking ' + empty[em] + '...');
-        var rr = await W.rescueRead(tabs2, storeOf(empty[em]), q, {});
+        var rr = await capRead(storeOf(empty[em]), W.rescueRead(tabs2, storeOf(empty[em]), q, {}));
         if (gen !== runGen) return;
         if (rr.state === 'ok') { W.mergeRuns(out, { runs: [rr] }); updateProgress(rr); adopt([rr]); }
       }

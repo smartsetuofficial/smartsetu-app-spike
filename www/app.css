@@ -1,4 +1,4 @@
-html{font-size:clamp(13.5px,4.0712vw,17.5px);-webkit-text-size-adjust:100%;text-size-adjust:100%}
+html{font-size:var(--rootfs,clamp(13.5px,4.0712vw,17.5px));-webkit-text-size-adjust:100%;text-size-adjust:100%}
 /* SmartSetu app screen (S20b, owner mockup: blue theme). Loaded after compare.css, which is shared with the extension and is not edited here.
  * Font: Inter 4.x (SIL OFL 1.1, V-045, V-073), a Latin subset bundled in fonts/ (Regular, Medium, Bold, ExtraBold Italic). No network. */
 @font-face{font-family:'Inter';font-style:normal;font-weight:400;font-display:swap;src:url(fonts/Inter-Regular.woff2) format('woff2')}
@@ -447,3 +447,12 @@ html.hx .privacy{margin-top:calc(0.6875rem*var(--hf,1) + var(--hx,0px))}
 html.hx .perks{padding-top:calc(0.625rem + var(--hx,0px))}
 html.navres .msg:empty{min-height:0;margin-top:0}
 html.navres main.wrap{padding-top:0;padding-bottom:0}
+
+/* ===== S23-24 (D-166): the home looks the same on every phone. fitguard.js cancels the phone's system font size for the page (--rootfs), so every phone of the same width gets the same layout. The privacy note is made smaller, never hidden before the last steps; the slogan sits close under it; what is freed goes to the Why card (fitGrow). ===== */
+html.navres .hero{padding-bottom:calc(0.3rem*var(--hf,1))}
+html.navres .foot{padding-top:calc(0.2rem*var(--hf,1))}
+html.navres .slogan{margin-top:calc(0.5rem*var(--hf,1))}
+html.navres .privacy{font-size:0.6875rem;padding:0.5625rem 0.75rem;border-radius:0.875rem;gap:0.625rem}
+html.navres .privacy svg{width:1.625rem;height:1.625rem}
+html.hfpsm .privacy{font-size:0.625rem;padding:0.4rem 0.65rem;gap:0.5rem;line-height:1.3}
+html.hfpsm .privacy svg{width:1.3rem;height:1.3rem}
