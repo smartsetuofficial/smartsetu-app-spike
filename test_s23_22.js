@@ -43,6 +43,6 @@ ck('owner phone case: Myntra Gen 2 twice at 1,099 shows once', real.view.groups[
 // both copies of view.js are the same file, and the app copy equals the extension copy
 ck('www/view.js equals extension/view.js byte for byte', fs.readFileSync(path.join(__dirname, 'www', 'view.js'), 'utf8') === fs.readFileSync(path.join(__dirname, '..', 'extension', 'view.js'), 'utf8'), 0);
 ck('both copies give the same result', JSON.stringify(V.buildView(real.res, [], 'T')) === JSON.stringify(VX.buildView(real.res, [], 'T')), 0);
-ck('app version 0.10.31', /VERSION = '0\.10\.31'/.test(fs.readFileSync(path.join(__dirname, 'src', 'app.js'), 'utf8')), 0);
+ck('app version 0.10.32', /VERSION = '0\.10\.32'/.test(fs.readFileSync(path.join(__dirname, 'src', 'app.js'), 'utf8')), 0);
 console.log('test_s23_22: ' + pass + ' passed, ' + fail + ' failed');
 process.exit(fail ? 1 : 0);

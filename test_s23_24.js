@@ -60,7 +60,7 @@ function capTest() {
   });
 }
 // ---- version
-ck('app version 0.10.31', /VERSION = '0\.10\.31'/.test(app) && JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version === '0.10.31', 0);
+ck('app version 0.10.32', /VERSION = '0\.10\.32'/.test(app) && JSON.parse(fs.readFileSync(path.join(__dirname, 'package.json'), 'utf8')).version === '0.10.32', 0);
 capTest().then(function () {
   console.log('test_s23_24: ' + pass + ' passed, ' + fail + ' failed');
   process.exit(fail ? 1 : 0);

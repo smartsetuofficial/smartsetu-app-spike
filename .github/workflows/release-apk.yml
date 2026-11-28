@@ -33,6 +33,49 @@ jobs:
         run: |
           npx cap add android
           npx cap sync android
+      - name: Keep WebView text at 100 percent (S23-26, D-170)
+        run: |
+          F=$(find android/app/src/main/java -name MainActivity.java | head -1)
+          if [ -z "$F" ]; then echo "MainActivity.java not found"; exit 1; fi
+          echo "--- MainActivity.java before ---"; cat "$F"
+          if ! grep -q 'extends BridgeActivity' "$F"; then echo "MainActivity does not extend BridgeActivity, stop"; exit 1; fi
+          if grep -q 'onCreate\|onResume' "$F"; then echo "MainActivity already has its own onCreate/onResume, stop (do not overwrite)"; exit 1; fi
+          PKG=$(grep -m1 '^package ' "$F")
+          if [ -z "$PKG" ]; then echo "no package line, stop"; exit 1; fi
+          cat > "$F" <<'EOF'
+          PKGLINE
+
+          import android.os.Bundle;
+          import android.webkit.WebSettings;
+          import com.getcapacitor.BridgeActivity;
+
+          public class MainActivity extends BridgeActivity {
+              @Override
+              public void onCreate(Bundle savedInstanceState) {
+                  super.onCreate(savedInstanceState);
+                  keepTextAt100();
+              }
+
+              @Override
+              public void onResume() {
+                  super.onResume();
+                  keepTextAt100();
+              }
+
+              private void keepTextAt100() {
+                  try {
+                      WebSettings s = getBridge().getWebView().getSettings();
+                      s.setTextZoom(100);
+                  } catch (Throwable t) {
+                      // never block the app
+                  }
+              }
+          }
+          EOF
+          sed -i "s|^PKGLINE$|$PKG|" "$F"
+          grep -q 'setTextZoom(100)' "$F"
+          grep -q "^$PKG\$" "$F"
+          echo "--- MainActivity.java after ---"; cat "$F"
       - name: Apply SmartSetu icon and splash
         run: |
           test -d resources/android/res
